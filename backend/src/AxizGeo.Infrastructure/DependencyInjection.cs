@@ -2,6 +2,7 @@ using AxizGeo.Application.Abstractions;
 using AxizGeo.Infrastructure.Identity;
 using AxizGeo.Infrastructure.Persistence;
 using AxizGeo.Infrastructure.Repositories;
+using AxizGeo.Infrastructure.Routing;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -34,10 +35,23 @@ public static class DependencyInjection
             .AddEntityFrameworkStores<AppDbContext>();
 
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
+        services.Configure<OrsOptions>(configuration.GetSection(OrsOptions.SectionName));
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IIdentityOperatorProvisioner, IdentityOperatorProvisioner>();
+
+        var orsBaseUrl = configuration[$"{OrsOptions.SectionName}:BaseUrl"]
+                         ?? "https://api.heigit.org/openrouteservice/";
+        if (!orsBaseUrl.EndsWith('/'))
+            orsBaseUrl += "/";
+
+        services.AddHttpClient<IRoutingProvider, OpenRouteServiceAdapter>(client =>
+            {
+                client.BaseAddress = new Uri(orsBaseUrl);
+                client.Timeout = TimeSpan.FromSeconds(15);
+            })
+            .AddStandardResilienceHandler();
 
         services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
         services.AddScoped<IUnitRepository, UnitRepository>();
