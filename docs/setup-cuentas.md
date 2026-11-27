@@ -125,7 +125,7 @@ Plan gratuito: sin tarjeta, soporta Docker. **Se duerme tras 15 min sin tráfico
 
 ```powershell
 dotnet --list-sdks      # debe incluir 10.0.x
-node -v                 # misma versión mayor que el CI y .nvmrc (Raúl tiene v26)
+node -v                 # misma versión mayor que el CI y .nvmrc (v22+)
 npm -v
 docker --version        # Docker Desktop corriendo
 git --version

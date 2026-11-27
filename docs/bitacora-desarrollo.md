@@ -54,3 +54,53 @@ Se construyó la SPA en `frontend/` cumpliendo estrictamente con **React 19** (`
 ## Fase 4 — Diagramas C4 Iniciales (`docs/c4-diagrams.md`)
 
 Se documentaron los diagramas **C4 Nivel 1 (Contexto)** y **C4 Nivel 2 (Contenedores)** en Mermaid para mostrar los actores del sistema (Personal de Monitoreo y Operadores), la relación entre la SPA en React 19, la Web API en .NET 10, PostgreSQL/PostGIS y los servicios externos (OpenRouteService y OpenFreeMap).
+
+---
+
+## Fase 5 — Goal 1: Modelo de Dominio, Persistencia PostGIS, Repositorios y Seed (`feature/backend-domain-and-db`)
+
+### 5.1 Entidades de Dominio (`AxizGeo.Domain/Entities`)
+Se implementaron todas las entidades del modelo operativo cuidando las reglas de negocio e invariantes:
+- **`Unit`**: Tractocamiones con número económico único (`T-101`, etc.), placas, marca, modelo y dimensiones (`HeightMeters`, `WeightTons`) empleadas en el ruteo de carga pesada.
+- **`Operator`**: Operadores vinculados 1 a 1 con una cuenta `ApplicationUser` de rol `Operator` y licencia federal única.
+- **`GeoRoute`**: Corredores autorizados con `Waypoints` (`MultiPoint`, SRID 4326), `Path` (`LineString`, SRID 4326) y margen de tolerancia en metros (`CorridorMeters`).
+- **`Geofence`**: Zonas permitidas (`Allowed`) o restringidas (`Restricted`) almacenadas como `Geometry` (`Point` + `RadiusMeters` para círculos, `Polygon` para polígonos).
+- **`Trip`**: Ciclo de vida del viaje (`Scheduled` → `InProgress` → `Completed` / `Cancelled`) con métodos de dominio (`Start`, `Finish`, `Cancel`) que lanzan `InvalidTripTransitionException` ante cambios de estado inválidos.
+- **`Position`**: Reportes de telemetría con UUID generado por el cliente (`ValueGeneratedNever`) para garantizar **idempotencia** cuando el simulador/móvil sincroniza lotes pendientes tras perder señal, conservando tanto `CapturedAt` como `ReceivedAt`.
+- **`Alert`**: Integrada directamente con el **Patrón State** (`AlertState`), exigiendo motivo de al menos 5 caracteres al resolver (`Resolve`) o descartar (`Dismiss`).
+
+### 5.2 Persistencia con Entity Framework Core 10 + PostGIS (`AxizGeo.Infrastructure/Persistence`)
+- **`AppDbContext`**: Extiende `IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>` para unificar autenticación basada en roles con las tablas operativas en PostgreSQL.
+- **Extensión e índices espaciales**: Se declaró `builder.HasPostgresExtension("postgis")`, columnas `geography (..., 4326)` (que calculan distancias reales en metros sobre el esferoide WGS84) e índices espaciales **`GIST`** sobre `geofences.Geometry` y `positions.Location`, además de índices compuestos en `(TripId, CapturedAt)` para acelerar consultas de historial de 12 horas.
+- **Enumeraciones legibles**: Todos los enums se persisten como `string` (`HasConversion<string>()`) cumpliendo el contrato de API y facilitando la auditoría en base de datos.
+
+### 5.3 Patrones Repository y Unit of Work (`AxizGeo.Application` + `AxizGeo.Infrastructure`)
+- **Problema que resuelven**: Evitan acoplar los servicios de aplicación y el motor de reglas directamente a `AppDbContext`/SQL, permiten escribir pruebas unitarias rápidas con dobles de prueba y agrupan múltiples cambios (ej. guardar posición + levantar alerta + actualizar `LastPositionAt` del viaje) en una única transacción atómica (`IUnitOfWork.SaveChangesAsync`).
+- Se implementó `Repository<T>` genérico junto con repositorios especializados de dominio (`UnitRepository`, `OperatorRepository`, `RouteRepository`, `GeofenceRepository`, `TripRepository`, `PositionRepository`, `AlertRepository`) y `UnitOfWork`.
+
+### 5.4 Migración Inicial y Datos Semilla (`Migrations/` y `DbSeeder.cs`)
+- Se generó la migración `InitialCreate` con todas las tablas de ASP.NET Core Identity y del dominio espacial de Axiz Geo.
+- Se creó `DbSeeder` idempotente que inicializa los 3 roles (`Admin`, `Monitor`, `Operator`), las 5 cuentas demo (leyendo la contraseña desde `Seed:DemoPassword` fuera del código fuente), 3 tractocamiones, 3 operadores, 2 rutas reales en **Nuevo Laredo** (*Puente III Comercio Mundial → Parque Industrial Oradel* y *Oradel → MX-85*) y 2 geocercas operativas.
+
+---
+
+## Fase 6 — Goal 2: Autenticación JWT por Roles, Manejo Centralizado de Errores y Catálogos (`feature/backend-auth-and-catalogs`)
+
+### 6.1 Seguridad con ASP.NET Core Identity + JWT Bearer (`AxizGeo.Infrastructure/Identity` y `AuthController`)
+- **Flujo de inicio de sesión (`POST /api/auth/login`)**: Valida formato de credenciales con FluentValidation, verifica existencia, estado activo (`IsActive`) y bloqueo temporal por intentos fallidos (`IsLockedOutAsync` / `AccessFailedAsync`), y emite un token JWT firmado con `HMAC-SHA256` (`JwtTokenGenerator`).
+- **Claims de autorización**: El JWT incorpora `sub` (`userId`), `email`, `name`, `role` (`Admin`, `Monitor`, `Operator`) y `operatorId` (cuando el usuario corresponde a un operador de unidad), permitiendo validar en siguientes fases que un operador solo interactúe con su propio viaje activo.
+- **Protección contra fuerza bruta**: Se configuró `AddRateLimiter` con una ventana fija de máximo 10 intentos por minuto por IP en `/api/auth/login` devolviendo `429 Too Many Requests`.
+- **Compatibilidad anticipada con WebSockets**: En `JwtBearerEvents.OnMessageReceived` se habilitó la lectura de `?access_token=` exclusivamente en `/hubs/fleet` para autenticar conexiones de **SignalR**.
+- **Validación estricta de secretos en producción**: En entornos no locales (`!IsDevelopment()`), la API exige que `Jwt:Key` provenga de variables de entorno, impidiendo arrancar con claves por defecto.
+
+### 6.2 Manejo estandarizado de errores RFC 9457 (`GlobalExceptionHandler`)
+Se implementó `IExceptionHandler` para traducir de forma uniforme las excepciones de dominio y aplicación a respuestas **ProblemDetails** en JSON (`camelCase`):
+- `ValidationException` (FluentValidation) → `400 Bad Request` con diccionario `errors` por campo.
+- `UnauthorizedAppException` → `401 Unauthorized`.
+- `ForbiddenException` → `403 Forbidden`.
+- `NotFoundException` → `404 Not Found`.
+- `ConflictException`, `InvalidAlertTransitionException`, `InvalidTripTransitionException` → `409 Conflict`.
+
+### 6.3 CRUD de Catálogos con Patrón DTO y Validadores (`UnitsController` y `OperatorsController`)
+- **Unidades (`/api/units`)**: Consulta paginada con búsqueda por número económico, placas, marca o modelo (`Admin,Monitor`), alta, edición y baja lógica (`Admin`). Valida dimensiones físicas (`HeightMeters`, `WeightTons`), unicidad de `EconomicNumber` e impide desactivar una unidad que tenga un viaje `InProgress` (`409 Conflict`).
+- **Operadores (`/api/operators`)**: Consulta paginada (`Admin,Monitor`), alta (`Admin`) aprovisionando automáticamente su cuenta `ApplicationUser` con rol `Operator` mediante el puerto desacoplado `IIdentityOperatorProvisioner`, edición sincronizada y baja lógica protegida si existe viaje activo.

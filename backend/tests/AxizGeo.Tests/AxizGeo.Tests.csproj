@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\AxizGeo.Domain\AxizGeo.Domain.csproj" />
     <ProjectReference Include="..\..\src\AxizGeo.Application\AxizGeo.Application.csproj" />
+    <ProjectReference Include="..\..\src\AxizGeo.Infrastructure\AxizGeo.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
