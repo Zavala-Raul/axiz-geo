@@ -1,0 +1,53 @@
+:root {
+  --axiz-navy: #213d71;
+  --axiz-gray: #aeaeb0;
+  --axiz-sand: #cbc4b1;
+  --axiz-bg: #f6f7f9;
+  --axiz-text: #1f2937;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: var(--axiz-text);
+  background-color: var(--axiz-bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  background-color: var(--axiz-navy);
+  color: #ffffff;
+  padding: 1rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 1.25rem;
+  letter-spacing: 0.08em;
+}
+
+.content {
+  max-width: 960px;
+  margin: 2rem auto;
+  padding: 0 1.5rem;
+}
+
+.card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-top: 4px solid var(--axiz-navy);
+  border-radius: 8px;
+  padding: 1.5rem;
+}
