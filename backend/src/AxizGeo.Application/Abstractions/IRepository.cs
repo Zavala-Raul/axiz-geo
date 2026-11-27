@@ -20,6 +20,7 @@ public interface IUnitRepository : IRepository<Unit>
     Task<bool> ExistsByEconomicNumberAsync(string economicNumber, Guid? excludeId = null, CancellationToken ct = default);
     Task<bool> HasActiveTripAsync(Guid unitId, CancellationToken ct = default);
     Task<IReadOnlyList<Unit>> ListActiveAsync(CancellationToken ct = default);
+    Task<(IReadOnlyList<Unit> Items, int TotalCount)> ListPagedAsync(string? search, bool includeInactive, int page, int pageSize, CancellationToken ct = default);
 }
 
 public interface IOperatorRepository : IRepository<Operator>
@@ -27,6 +28,7 @@ public interface IOperatorRepository : IRepository<Operator>
     Task<Operator?> GetByUserIdAsync(Guid userId, CancellationToken ct = default);
     Task<bool> ExistsByLicenseAsync(string licenseNumber, Guid? excludeId = null, CancellationToken ct = default);
     Task<bool> HasActiveTripAsync(Guid operatorId, CancellationToken ct = default);
+    Task<(IReadOnlyList<Operator> Items, int TotalCount)> ListPagedAsync(string? search, bool includeInactive, int page, int pageSize, CancellationToken ct = default);
 }
 
 public interface IRouteRepository : IRepository<GeoRoute>
