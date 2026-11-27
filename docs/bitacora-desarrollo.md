@@ -81,3 +81,21 @@ Se implementaron todas las entidades del modelo operativo cuidando las reglas de
 ### 5.4 Migración Inicial y Datos Semilla (`Migrations/` y `DbSeeder.cs`)
 - Se generó la migración `InitialCreate` con todas las tablas de ASP.NET Core Identity y del dominio espacial de Axiz Geo.
 - Se creó `DbSeeder` idempotente que inicializa los 3 roles (`Admin`, `Monitor`, `Operator`), las 5 cuentas demo (leyendo la contraseña desde `Seed:DemoPassword` fuera del código fuente), 3 tractocamiones, 3 operadores, 2 rutas reales en **Nuevo Laredo** (*Puente III Comercio Mundial → Parque Industrial Oradel* y *Oradel → MX-85*) y 2 geocercas operativas.
+
+---
+
+## Fase 6 — Autenticación por Roles, Layout Institucional y Ruteo Protegido en Frontend (`feature/frontend-auth-and-layout`)
+
+### 6.1 Arquitectura Modular por Features y Contrato de Tipos (`src/shared/`)
+- **`src/shared/types/api.ts`**: Definición estricta en TypeScript de todos los DTOs, enumeraciones como strings (`Role`, `TripStatus`, `GeofenceType`, `GeofenceKind`, `AlertType`, `AlertStatus`, `AlertSeverity`, `LiveStatus`), geometrías GeoJSON (`[longitud, latitud]` SRID 4326) y errores `ProblemDetails` (RFC 9457) alineados con `docs/api-contract.md`.
+- **`src/shared/utils/date.ts`**: Conversión estandarizada de marcas de tiempo ISO 8601 UTC hacia la zona horaria fronteriza `America/Matamoros` y cálculo de antigüedad relativa (`"hace 45 s"`).
+- **`src/shared/api/httpClient.ts`**: Cliente HTTP desacoplado que inyecta `Authorization: Bearer <accessToken>`, procesa respuestas `ProblemDetails` y notifica cierre de sesión automático ante respuestas `401 Unauthorized`.
+
+### 6.2 Módulo de Autenticación y Patrones en Frontend (`src/features/auth/`)
+- **Separación Container / Presentational**: `LoginPage.tsx` (contenedor con lógica de estado, redirección por rol y manejo de errores) desacoplado de `LoginForm.tsx` (componente presentacional puro con selector rápido de las 5 cuentas semilla de demostración).
+- **Custom Hook y Context (`AuthContext` + `useAuth`)**: Gestión centralizada de sesión JWT persistida en `localStorage`, validación de expiración (`expiresAt`), revalidación con `GET /api/auth/me` y verificación de permisos por rol (`hasRole`).
+- **Conmutación limpia Mock / API Real (`VITE_USE_MOCKS`)**: `authService.ts` alterna de forma transparente entre `POST /api/auth/login` del backend .NET 10 y `authMock.ts` sin acoplar los componentes de UI.
+
+### 6.3 Layout Institucional Axiz Geo y Guard de Rutas (`ProtectedRoute` y `AppLayout`)
+- **`ProtectedRoute.tsx`**: Guard de navegación en React Router que protege rutas autenticadas y valida la matriz de permisos (`Admin`, `Monitor`, `Operator`), mostrando una vista explícita `HTTP 403 · Acceso Restringido por Rol` cuando un perfil intenta ingresar a un módulo no autorizado.
+- **`AppLayout.tsx`**: Shell principal con la identidad visual de Axiz Geo (`#213D71` azul profundo, `#AEAEB0` gris claro, `#CBC4B1` crema arena), menú lateral filtrado dinámicamente según el rol activo, reloj en vivo en `America/Matamoros`, indicador de salud del backend (`/health` o modo simulación) y etiquetas de estado accesibles que combinan siempre ícono y texto.
