@@ -75,6 +75,8 @@ La aplicación web abrirá en `http://localhost:5173`.
 ## Documentación Técnica
 
 - [Diagramas de Arquitectura C4 (Contexto y Contenedores)](./docs/c4-diagrams.md)
+- [Stack Tecnológico y Análisis Técnico](./docs/stack-y-analisis.md)
+- [Patrones de Diseño, ORM y Estrategia Git / CI-CD](./docs/patrones-orm-y-git.md)
 - [Contrato de la API (v1)](./docs/api-contract.md)
 - [Bitácora de Construcción del Proyecto](./docs/bitacora-desarrollo.md)
 - [Configuración de Cuentas y Servicios](./docs/setup-cuentas.md)
