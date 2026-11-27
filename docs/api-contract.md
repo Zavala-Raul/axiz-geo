@@ -1,6 +1,6 @@
 # Axiz Geo — Contrato de la API (v1)
 
-Acuerdo entre **Frontend (Gael)** y **Backend (Raúl)**. Cualquier cambio a este documento se hace por PR y lo aprueban ambos.
+Acuerdo técnico entre **Frontend** y **Backend**. Cualquier cambio a este documento se hace por PR y lo aprueban ambos responsables.
 Cuando la API esté arriba, la fuente de verdad será el OpenAPI (`/openapi/v1.json`, UI en `/scalar`) y los tipos de TypeScript se generan desde ahí.
 
 ---
@@ -452,4 +452,4 @@ Contraseña de demo: se define en la variable de entorno `Seed__DemoPassword` (n
 
 ## 15. Mock para el frontend mientras el backend avanza
 
-Gael puede usar **MSW** (`msw`) con handlers que devuelvan exactamente los tipos de este documento. Carpeta sugerida: `frontend/src/mocks/`. Activarlo con `VITE_USE_MOCKS=true`. Al conectar con la API real solo se cambia la variable.
+El equipo de Frontend puede usar **MSW** (`msw`) con handlers que devuelvan exactamente los tipos de este documento. Carpeta sugerida: `frontend/src/mocks/`. Activarlo con `VITE_USE_MOCKS=true`. Al conectar con la API real solo se cambia la variable.

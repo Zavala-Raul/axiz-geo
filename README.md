@@ -2,16 +2,7 @@
 
 Sistema web de geocercas y monitoreo de rutas para unidades de transporte de carga (Caso de estudio: Nuevo Laredo, Tamaulipas).
 
-Desarrollado como **Proyecto Final — Unidad 6** de Tópicos Avanzados de Programación.
-
----
-
-## Equipo y Responsabilidades
-
-| Integrante | Rol |
-|---|---|
-| **Raúl Adriell Zavala Lira** | Backend (`.NET 10` + PostgreSQL/PostGIS) y Administración de GitHub / CI-CD |
-| **Gael Onofre García** | Frontend (`React 19` + `TypeScript`) |
+Desarrollado como **Proyecto Final — Unidad 6**.
 
 ---
 

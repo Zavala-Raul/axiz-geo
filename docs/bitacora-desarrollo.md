@@ -22,7 +22,7 @@ Se configuró un contenedor basado en `postgis/postgis:17-3.5` en el puerto `543
 Para cumplir con la validación automática al integrar cambios hacia `develop` y `main`:
 - **Job `Backend (.NET 10)`**: Instala el SDK `10.0.x`, restaura paquetes NuGet, compila `AxizGeo.sln` en modo `Release` y ejecuta las pruebas unitarias con `dotnet test`.
 - **Job `Frontend (React 19 + TS)`**: Configura Node, instala dependencias limpias con `npm ci` (con caché de `package-lock.json`), verifica tipos con `tsc -b`, ejecuta ESLint y valida la compilación SPA con `npm run build`.
-- **`.github/pull_request_template.md`**: Checklist de calidad y seguridad para las revisiones cruzadas de Pull Requests entre Raúl y Gael.
+- **`.github/pull_request_template.md`**: Checklist de calidad y seguridad para las revisiones cruzadas de Pull Requests entre los integrantes del equipo.
 
 ---
 

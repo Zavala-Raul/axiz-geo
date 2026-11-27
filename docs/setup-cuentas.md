@@ -2,13 +2,13 @@
 
 > **Nunca** pongan llaves, contraseñas o cadenas de conexión en el repo. Van en `dotnet user-secrets` (local), en variables de entorno de Render/Vercel y en *GitHub Secrets*.
 
-| Servicio | Para qué | Estado | Responsable |
+| Servicio | Para qué | Estado | Rol responsable |
 |---|---|---|---|
-| GitHub | Repo público, PRs, Actions | ✅ Ya existe | Raúl |
-| Vercel | Hosting del frontend | ✅ Ya existe | Raúl (invitar a Gael si se usa equipo) |
-| Neon | PostgreSQL + PostGIS | ⬜ Crear | Raúl |
-| Render | Hosting de la API (.NET 10 en Docker) | ⬜ Crear | Raúl |
-| openrouteservice | Rutas para tractocamión | ⬜ Crear | Raúl |
+| GitHub | Repo público, PRs, Actions | ✅ Ya existe | Admin Repo |
+| Vercel | Hosting del frontend | ✅ Ya existe | Frontend / Admin |
+| Neon | PostgreSQL + PostGIS | ✅ Configurado | Backend |
+| Render | Hosting de la API (.NET 10 en Docker) | ⬜ Crear en deploy | Backend |
+| openrouteservice | Rutas para tractocamión | ✅ Configurado | Backend |
 
 ---
 
@@ -111,7 +111,7 @@ Plan gratuito: sin tarjeta, soporta Docker. **Se duerme tras 15 min sin tráfico
 ## 5. GitHub
 
 1. Crear el repo **público** `axiz-geo` (sin README; lo subimos nosotros).
-2. *Settings → Collaborators* → invitar a Gael con permiso **Write**.
+2. *Settings → Collaborators* → invitar al responsable de Frontend con permiso **Write**.
 3. Tras el primer push de `main` y `develop`: *Settings → Rules → New branch ruleset* para `main` y `develop`:
    - Require a pull request before merging (1 aprobación)
    - Require status checks to pass → `Backend (.NET 10)` y `Frontend (React 19 + TS)`
