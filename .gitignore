@@ -1,0 +1,47 @@
+# =========================================================
+# Axiz Geo — .gitignore (Backend .NET 10 + Frontend React/TS)
+# =========================================================
+
+# Secretos y variables de entorno (NUNCA versionar)
+.env
+.env.*
+!.env.example
+**/appsettings.Local.json
+**/appsettings.*.local.json
+
+# Documentos administrativos locales de entrega escolar
+Entrega1_*
+Propuesta_U6_*
+*.tmp
+~$*
+
+# .NET / Visual Studio / Rider
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+TestResults/
+coverage/
+
+# Node / Vite / React
+node_modules/
+dist/
+dist-ssr/
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volumes locales
+postgres-data/
