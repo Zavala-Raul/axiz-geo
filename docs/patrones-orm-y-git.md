@@ -52,7 +52,7 @@ flowchart TB
 | **Chain of Responsibility** | `ITelemetryRule` (`AccuracyRule` → `DeviationRule` → `RestrictedZoneRule`) y `TelemetryPipeline` | Procesa cada posición GPS a través de eslabones independientes; si una lectura tiene baja precisión (`> 50 m`), corta la cadena sin disparar falsas alarmas. |
 | **Adapter** | `IRoutingProvider` → `OpenRouteServiceAdapter` | Traduce peticiones y respuestas externas de HeiGIT OpenRouteService (`driving-hgv`) a geometrías `LineString` internas del dominio, ocultando el proveedor externo. |
 | **Factory** | `AlertFactory` | Centraliza la creación consistente de alertas asignando severidad, mensaje en español y metadatos según el `AlertType`. |
-| **Observer (Pub/Sub)** | `IFleetNotifier` → `SignalRFleetNotifier` (`FleetHub`) | Desacopla el motor de telemetría/alertas del transporte WebSocket; el motor emite eventos y los paneles conectados reciben actualizaciones en vivo. |
+| **Observer (Pub/Sub)** | `IAlertNotificationChannel` → `SignalRAlertChannel` (`FleetHub`) + `EmailAlertChannel` (SMTP) | Desacopla el motor de telemetría/alertas de los medios de salida; al generarse una alerta notifica tanto en tiempo real al panel web como por correo electrónico sin tocar las reglas de negocio. |
 | **DTO** | Registros `*Dto`, `*Request`, `*Response` en `AxizGeo.Application/DTOs` | Evita exponer entidades internas o datos sensibles de Identity y define un contrato estable hacia el Frontend. |
 | **Dependency Injection** | `DependencyInjection.cs` (`Application`, `Infrastructure`) y `Program.cs` | Inversión de control entre capas para bajo acoplamiento y pruebas unitarias aisladas. |
 
