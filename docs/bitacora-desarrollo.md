@@ -54,3 +54,30 @@ Se construyó la SPA en `frontend/` cumpliendo estrictamente con **React 19** (`
 ## Fase 4 — Diagramas C4 Iniciales (`docs/c4-diagrams.md`)
 
 Se documentaron los diagramas **C4 Nivel 1 (Contexto)** y **C4 Nivel 2 (Contenedores)** en Mermaid para mostrar los actores del sistema (Personal de Monitoreo y Operadores), la relación entre la SPA en React 19, la Web API en .NET 10, PostgreSQL/PostGIS y los servicios externos (OpenRouteService y OpenFreeMap).
+
+---
+
+## Fase 5 — Goal 1: Modelo de Dominio, Persistencia PostGIS, Repositorios y Seed (`feature/backend-domain-and-db`)
+
+### 5.1 Entidades de Dominio (`AxizGeo.Domain/Entities`)
+Se implementaron todas las entidades del modelo operativo cuidando las reglas de negocio e invariantes:
+- **`Unit`**: Tractocamiones con número económico único (`T-101`, etc.), placas, marca, modelo y dimensiones (`HeightMeters`, `WeightTons`) empleadas en el ruteo de carga pesada.
+- **`Operator`**: Operadores vinculados 1 a 1 con una cuenta `ApplicationUser` de rol `Operator` y licencia federal única.
+- **`GeoRoute`**: Corredores autorizados con `Waypoints` (`MultiPoint`, SRID 4326), `Path` (`LineString`, SRID 4326) y margen de tolerancia en metros (`CorridorMeters`).
+- **`Geofence`**: Zonas permitidas (`Allowed`) o restringidas (`Restricted`) almacenadas como `Geometry` (`Point` + `RadiusMeters` para círculos, `Polygon` para polígonos).
+- **`Trip`**: Ciclo de vida del viaje (`Scheduled` → `InProgress` → `Completed` / `Cancelled`) con métodos de dominio (`Start`, `Finish`, `Cancel`) que lanzan `InvalidTripTransitionException` ante cambios de estado inválidos.
+- **`Position`**: Reportes de telemetría con UUID generado por el cliente (`ValueGeneratedNever`) para garantizar **idempotencia** cuando el simulador/móvil sincroniza lotes pendientes tras perder señal, conservando tanto `CapturedAt` como `ReceivedAt`.
+- **`Alert`**: Integrada directamente con el **Patrón State** (`AlertState`), exigiendo motivo de al menos 5 caracteres al resolver (`Resolve`) o descartar (`Dismiss`).
+
+### 5.2 Persistencia con Entity Framework Core 10 + PostGIS (`AxizGeo.Infrastructure/Persistence`)
+- **`AppDbContext`**: Extiende `IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>` para unificar autenticación basada en roles con las tablas operativas en PostgreSQL.
+- **Extensión e índices espaciales**: Se declaró `builder.HasPostgresExtension("postgis")`, columnas `geography (..., 4326)` (que calculan distancias reales en metros sobre el esferoide WGS84) e índices espaciales **`GIST`** sobre `geofences.Geometry` y `positions.Location`, además de índices compuestos en `(TripId, CapturedAt)` para acelerar consultas de historial de 12 horas.
+- **Enumeraciones legibles**: Todos los enums se persisten como `string` (`HasConversion<string>()`) cumpliendo el contrato de API y facilitando la auditoría en base de datos.
+
+### 5.3 Patrones Repository y Unit of Work (`AxizGeo.Application` + `AxizGeo.Infrastructure`)
+- **Problema que resuelven**: Evitan acoplar los servicios de aplicación y el motor de reglas directamente a `AppDbContext`/SQL, permiten escribir pruebas unitarias rápidas con dobles de prueba y agrupan múltiples cambios (ej. guardar posición + levantar alerta + actualizar `LastPositionAt` del viaje) en una única transacción atómica (`IUnitOfWork.SaveChangesAsync`).
+- Se implementó `Repository<T>` genérico junto con repositorios especializados de dominio (`UnitRepository`, `OperatorRepository`, `RouteRepository`, `GeofenceRepository`, `TripRepository`, `PositionRepository`, `AlertRepository`) y `UnitOfWork`.
+
+### 5.4 Migración Inicial y Datos Semilla (`Migrations/` y `DbSeeder.cs`)
+- Se generó la migración `InitialCreate` con todas las tablas de ASP.NET Core Identity y del dominio espacial de Axiz Geo.
+- Se creó `DbSeeder` idempotente que inicializa los 3 roles (`Admin`, `Monitor`, `Operator`), las 5 cuentas demo (leyendo la contraseña desde `Seed:DemoPassword` fuera del código fuente), 3 tractocamiones, 3 operadores, 2 rutas reales en **Nuevo Laredo** (*Puente III Comercio Mundial → Parque Industrial Oradel* y *Oradel → MX-85*) y 2 geocercas operativas.
