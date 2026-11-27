@@ -16,6 +16,37 @@ public class UnitRepository(AppDbContext db) : Repository<Unit>(db), IUnitReposi
 
     public async Task<IReadOnlyList<Unit>> ListActiveAsync(CancellationToken ct = default) =>
         await Set.AsNoTracking().Where(u => u.IsActive).OrderBy(u => u.EconomicNumber).ToListAsync(ct);
+
+    public async Task<(IReadOnlyList<Unit> Items, int TotalCount)> ListPagedAsync(
+        string? search,
+        bool includeInactive,
+        int page,
+        int pageSize,
+        CancellationToken ct = default)
+    {
+        var query = Set.AsNoTracking().AsQueryable();
+        if (!includeInactive)
+            query = query.Where(u => u.IsActive);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+            query = query.Where(u =>
+                u.EconomicNumber.ToLower().Contains(term) ||
+                u.Plates.ToLower().Contains(term) ||
+                u.Brand.ToLower().Contains(term) ||
+                u.Model.ToLower().Contains(term));
+        }
+
+        var total = await query.CountAsync(ct);
+        var items = await query
+            .OrderBy(u => u.EconomicNumber)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        return (items, total);
+    }
 }
 
 public class OperatorRepository(AppDbContext db) : Repository<Operator>(db), IOperatorRepository
@@ -28,6 +59,36 @@ public class OperatorRepository(AppDbContext db) : Repository<Operator>(db), IOp
 
     public Task<bool> HasActiveTripAsync(Guid operatorId, CancellationToken ct = default) =>
         Db.Trips.AnyAsync(t => t.OperatorId == operatorId && t.Status == TripStatus.InProgress, ct);
+
+    public async Task<(IReadOnlyList<Operator> Items, int TotalCount)> ListPagedAsync(
+        string? search,
+        bool includeInactive,
+        int page,
+        int pageSize,
+        CancellationToken ct = default)
+    {
+        var query = Set.AsNoTracking().AsQueryable();
+        if (!includeInactive)
+            query = query.Where(o => o.IsActive);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+            query = query.Where(o =>
+                o.FullName.ToLower().Contains(term) ||
+                o.LicenseNumber.ToLower().Contains(term) ||
+                o.Email.ToLower().Contains(term));
+        }
+
+        var total = await query.CountAsync(ct);
+        var items = await query
+            .OrderBy(o => o.FullName)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        return (items, total);
+    }
 }
 
 public class RouteRepository(AppDbContext db) : Repository<GeoRoute>(db), IRouteRepository
