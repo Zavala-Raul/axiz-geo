@@ -140,12 +140,14 @@ export function AppLayout() {
     <div className="layout-shell">
       <aside className="sidebar" aria-label="Navegación principal">
         <div className="sidebar__brand">
-          <span className="sidebar__logo-icon" aria-hidden="true">
-            ◎
-          </span>
+          <img
+            src="/axiz_logo.png"
+            alt="Logotipo oficial Axiz Geo"
+            className="sidebar__logo-img"
+          />
           <div>
             <div className="sidebar__title">AXIZ GEO</div>
-            <div className="sidebar__subtitle">Nuevo Laredo · C4</div>
+            <div className="sidebar__subtitle">Sistema Telemático · C4</div>
           </div>
         </div>
 

@@ -43,12 +43,14 @@ export function LoginForm({
       <div className="login-container">
         <section className="login-brand-panel" aria-label="Identidad Axiz Geo">
           <div className="brand-badge">
-            <span className="brand-orbit-icon" aria-hidden="true">
-              ◎
-            </span>
+            <img
+              src="/axiz_logo.png"
+              alt="Logotipo oficial Axiz Geo"
+              className="brand-logo-img"
+            />
             <div>
               <h1 className="brand-title">AXIZ GEO</h1>
-              <p className="brand-tagline">Tecnología que orienta</p>
+              <p className="brand-tagline">Sistema Telemático de Monitoreo y Geocercas</p>
             </div>
           </div>
 

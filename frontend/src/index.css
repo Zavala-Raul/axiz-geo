@@ -207,18 +207,24 @@ code {
   gap: 0.9rem;
 }
 
-.brand-orbit-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background-color: rgba(203, 196, 177, 0.2);
+.brand-logo-img {
+  height: 52px;
+  width: auto;
+  background-color: #ffffff;
+  padding: 6px 10px;
+  border-radius: 10px;
   border: 2px solid var(--axiz-sand);
-  color: var(--axiz-sand);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.6rem;
-  font-weight: 700;
+  object-fit: contain;
+}
+
+.sidebar__logo-img {
+  height: 36px;
+  width: auto;
+  background-color: #ffffff;
+  padding: 4px 7px;
+  border-radius: 8px;
+  border: 1.5px solid var(--axiz-sand);
+  object-fit: contain;
 }
 
 .brand-title {
