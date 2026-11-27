@@ -49,3 +49,18 @@ public enum AlertSeverity
     Medium,
     High
 }
+
+public enum PositionSource
+{
+    Simulator,
+    BrowserGps
+}
+
+public enum LiveStatus
+{
+    OnRoute,
+    Stopped,
+    Deviated,
+    NoSignal,
+    Idle
+}
