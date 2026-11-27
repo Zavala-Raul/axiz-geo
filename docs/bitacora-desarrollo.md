@@ -81,3 +81,26 @@ Se implementaron todas las entidades del modelo operativo cuidando las reglas de
 ### 5.4 Migración Inicial y Datos Semilla (`Migrations/` y `DbSeeder.cs`)
 - Se generó la migración `InitialCreate` con todas las tablas de ASP.NET Core Identity y del dominio espacial de Axiz Geo.
 - Se creó `DbSeeder` idempotente que inicializa los 3 roles (`Admin`, `Monitor`, `Operator`), las 5 cuentas demo (leyendo la contraseña desde `Seed:DemoPassword` fuera del código fuente), 3 tractocamiones, 3 operadores, 2 rutas reales en **Nuevo Laredo** (*Puente III Comercio Mundial → Parque Industrial Oradel* y *Oradel → MX-85*) y 2 geocercas operativas.
+
+---
+
+## Fase 6 — Goal 2: Autenticación JWT por Roles, Manejo Centralizado de Errores y Catálogos (`feature/backend-auth-and-catalogs`)
+
+### 6.1 Seguridad con ASP.NET Core Identity + JWT Bearer (`AxizGeo.Infrastructure/Identity` y `AuthController`)
+- **Flujo de inicio de sesión (`POST /api/auth/login`)**: Valida formato de credenciales con FluentValidation, verifica existencia, estado activo (`IsActive`) y bloqueo temporal por intentos fallidos (`IsLockedOutAsync` / `AccessFailedAsync`), y emite un token JWT firmado con `HMAC-SHA256` (`JwtTokenGenerator`).
+- **Claims de autorización**: El JWT incorpora `sub` (`userId`), `email`, `name`, `role` (`Admin`, `Monitor`, `Operator`) y `operatorId` (cuando el usuario corresponde a un operador de unidad), permitiendo validar en siguientes fases que un operador solo interactúe con su propio viaje activo.
+- **Protección contra fuerza bruta**: Se configuró `AddRateLimiter` con una ventana fija de máximo 10 intentos por minuto por IP en `/api/auth/login` devolviendo `429 Too Many Requests`.
+- **Compatibilidad anticipada con WebSockets**: En `JwtBearerEvents.OnMessageReceived` se habilitó la lectura de `?access_token=` exclusivamente en `/hubs/fleet` para autenticar conexiones de **SignalR**.
+- **Validación estricta de secretos en producción**: En entornos no locales (`!IsDevelopment()`), la API exige que `Jwt:Key` provenga de variables de entorno, impidiendo arrancar con claves por defecto.
+
+### 6.2 Manejo estandarizado de errores RFC 9457 (`GlobalExceptionHandler`)
+Se implementó `IExceptionHandler` para traducir de forma uniforme las excepciones de dominio y aplicación a respuestas **ProblemDetails** en JSON (`camelCase`):
+- `ValidationException` (FluentValidation) → `400 Bad Request` con diccionario `errors` por campo.
+- `UnauthorizedAppException` → `401 Unauthorized`.
+- `ForbiddenException` → `403 Forbidden`.
+- `NotFoundException` → `404 Not Found`.
+- `ConflictException`, `InvalidAlertTransitionException`, `InvalidTripTransitionException` → `409 Conflict`.
+
+### 6.3 CRUD de Catálogos con Patrón DTO y Validadores (`UnitsController` y `OperatorsController`)
+- **Unidades (`/api/units`)**: Consulta paginada con búsqueda por número económico, placas, marca o modelo (`Admin,Monitor`), alta, edición y baja lógica (`Admin`). Valida dimensiones físicas (`HeightMeters`, `WeightTons`), unicidad de `EconomicNumber` e impide desactivar una unidad que tenga un viaje `InProgress` (`409 Conflict`).
+- **Operadores (`/api/operators`)**: Consulta paginada (`Admin,Monitor`), alta (`Admin`) aprovisionando automáticamente su cuenta `ApplicationUser` con rol `Operator` mediante el puerto desacoplado `IIdentityOperatorProvisioner`, edición sincronizada y baja lógica protegida si existe viaje activo.
