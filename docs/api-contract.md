@@ -102,6 +102,7 @@ Todas las respuestas de error usan **ProblemDetails** (RFC 9457):
 {
   "accessToken": "eyJhbGciOi...",
   "expiresAt": "2026-12-01T20:30:00Z",
+  "refreshToken": "d9b2d63d...",
   "user": {
     "id": "8b1f...", "email": "monitor@axiz.demo", "fullName": "Mónica Treviño",
     "role": "Monitor", "operatorId": null
@@ -113,10 +114,18 @@ Todas las respuestas de error usan **ProblemDetails** (RFC 9457):
 ### `GET /api/auth/me` · autenticado
 Devuelve el mismo objeto `user`. El front lo usa al recargar la página para validar el token.
 
-### `POST /api/auth/refresh` · *(NICE)* cookie httpOnly `axiz_refresh`
-Respuesta igual a login. Si no se implementa, el token dura ~8 h.
+### `POST /api/auth/refresh` · público (con `refreshToken` vigente)
+Permite renovar dinámicamente la sesión sin pedir contraseña otra vez (implementado en Fase de endurecimiento / Goal 6; mientras `refreshToken` sea `null`, el cliente usa únicamente `accessToken` hasta `expiresAt`).
+```json
+// Request
+{ "refreshToken": "d9b2d63d..." }
 
-### `POST /api/auth/logout` · autenticado → `204`
+// 200 Response: mismo formato que LoginResponse (rota el refreshToken anterior)
+```
+Devuelve `401` si el `refreshToken` expiró o fue revocado (el front limpia sesión y redirige a `/login`).
+
+### `POST /api/auth/logout` · autenticado
+Body opcional `{ "refreshToken": "d9b2d63d..." }` para revocar el token en base de datos → `204`.
 
 **Claims del JWT:** `sub` (userId), `email`, `name`, `role`, `operatorId` (si aplica).
 
