@@ -1,4 +1,5 @@
 import { ApiError } from '../../../shared/api/httpClient';
+import { toUtcIsoString } from '../../../shared/utils/date';
 import type { AuthUser, DemoAccountOption, LoginRequest, LoginResponse } from '../types';
 
 const MOCK_USERS: Record<string, AuthUser> = {
@@ -77,17 +78,27 @@ export const DEMO_ACCOUNTS: DemoAccountOption[] = [
   },
 ];
 
-function encodeMockToken(email: string): string {
-  return `mock-jwt-${btoa(encodeURIComponent(email))}`;
+function encodeMockToken(prefix: string, email: string): string {
+  return `${prefix}-${btoa(encodeURIComponent(email))}`;
 }
 
-function decodeMockToken(token: string): string | null {
-  if (!token.startsWith('mock-jwt-')) return null;
+function decodeMockToken(prefix: string, token: string): string | null {
+  if (!token.startsWith(`${prefix}-`)) return null;
   try {
-    return decodeURIComponent(atob(token.replace(/^mock-jwt-/, '')));
+    return decodeURIComponent(atob(token.slice(prefix.length + 1)));
   } catch {
     return null;
   }
+}
+
+function buildMockLoginResponse(user: AuthUser): LoginResponse {
+  const expiresAt = toUtcIsoString(Date.now() + 8 * 60 * 60 * 1000);
+  return {
+    accessToken: encodeMockToken('mock-jwt', user.email),
+    expiresAt,
+    refreshToken: encodeMockToken('mock-refresh', user.email),
+    user,
+  };
 }
 
 export async function mockLogin(request: LoginRequest): Promise<LoginResponse> {
@@ -103,12 +114,21 @@ export async function mockLogin(request: LoginRequest): Promise<LoginResponse> {
     });
   }
 
-  const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString();
-  return {
-    accessToken: encodeMockToken(user.email),
-    expiresAt,
-    user,
-  };
+  return buildMockLoginResponse(user);
+}
+
+export async function mockRefresh(refreshToken: string): Promise<LoginResponse> {
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  const email = decodeMockToken('mock-refresh', refreshToken);
+  const user = email ? MOCK_USERS[email] : undefined;
+  if (!user) {
+    throw new ApiError('El refresh token expiró o fue revocado.', 401, {
+      title: 'Unauthorized',
+      status: 401,
+      detail: 'El refresh token expiró o fue revocado.',
+    });
+  }
+  return buildMockLoginResponse(user);
 }
 
 export async function mockGetMe(token: string | null): Promise<AuthUser> {
@@ -116,7 +136,7 @@ export async function mockGetMe(token: string | null): Promise<AuthUser> {
   if (!token) {
     throw new ApiError('Sesión no encontrada.', 401);
   }
-  const email = decodeMockToken(token);
+  const email = decodeMockToken('mock-jwt', token);
   const user = email ? MOCK_USERS[email] : undefined;
   if (!user) {
     throw new ApiError('El token de sesión expiró o no es válido.', 401);

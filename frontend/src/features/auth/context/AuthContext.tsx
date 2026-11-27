@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   registerAccessTokenProvider,
+  registerTokenRefreshHandler,
   registerUnauthorizedHandler,
   SESSION_STORAGE_KEY,
 } from '../../../shared/api/httpClient';
@@ -12,6 +13,7 @@ import { AuthContext, type AuthContextValue } from './AuthContextObject';
 interface StoredSession {
   accessToken: string;
   expiresAt: string;
+  refreshToken?: string | null;
   user: AuthUser;
 }
 
@@ -23,7 +25,9 @@ function readStoredSession(): StoredSession | null {
     if (!parsed.accessToken || !parsed.user || !parsed.expiresAt) {
       return null;
     }
-    if (new Date(parsed.expiresAt).getTime() <= Date.now()) {
+    const isAccessTokenExpired = new Date(parsed.expiresAt).getTime() <= Date.now();
+    // If access token expired and there is no refreshToken to rotate, invalidate stored session
+    if (isAccessTokenExpired && !parsed.refreshToken) {
       localStorage.removeItem(SESSION_STORAGE_KEY);
       return null;
     }
@@ -48,13 +52,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [accessToken, setAccessToken] = useState<string | null>(
     initialSession?.accessToken ?? null,
   );
+  const [refreshToken, setRefreshToken] = useState<string | null>(
+    initialSession?.refreshToken ?? null,
+  );
   const [expiresAt, setExpiresAt] = useState<string | null>(initialSession?.expiresAt ?? null);
   const [isLoading, setIsLoading] = useState<boolean>(Boolean(initialSession?.accessToken));
+
+  const applySession = useCallback((session: LoginResponse) => {
+    persistSession(session);
+    setAccessToken(session.accessToken);
+    setRefreshToken(session.refreshToken ?? null);
+    setExpiresAt(session.expiresAt);
+    setUser(session.user);
+  }, []);
 
   const clearSession = useCallback(() => {
     persistSession(null);
     setUser(null);
     setAccessToken(null);
+    setRefreshToken(null);
     setExpiresAt(null);
   }, []);
 
@@ -71,6 +87,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [clearSession]);
 
   useEffect(() => {
+    registerTokenRefreshHandler(async () => {
+      if (!refreshToken) {
+        return null;
+      }
+      try {
+        const refreshed = await authService.refresh(refreshToken);
+        applySession(refreshed);
+        return refreshed.accessToken;
+      } catch {
+        clearSession();
+        return null;
+      }
+    });
+    return () => registerTokenRefreshHandler(null);
+  }, [refreshToken, applySession, clearSession]);
+
+  useEffect(() => {
     if (!accessToken) {
       setIsLoading(false);
       return;
@@ -83,7 +116,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!active) return;
         setUser(freshUser);
         if (expiresAt) {
-          persistSession({ accessToken, expiresAt, user: freshUser });
+          persistSession({
+            accessToken,
+            expiresAt,
+            refreshToken,
+            user: freshUser,
+          });
         }
       })
       .catch(() => {
@@ -99,21 +137,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, [accessToken, expiresAt, clearSession]);
+  }, [accessToken, expiresAt, refreshToken, clearSession]);
 
-  const login = useCallback(async (credentials: LoginRequest): Promise<AuthUser> => {
-    const response = await authService.login(credentials);
-    persistSession(response);
-    setAccessToken(response.accessToken);
-    setExpiresAt(response.expiresAt);
-    setUser(response.user);
-    return response.user;
-  }, []);
+  const login = useCallback(
+    async (credentials: LoginRequest): Promise<AuthUser> => {
+      const response = await authService.login(credentials);
+      applySession(response);
+      return response.user;
+    },
+    [applySession],
+  );
 
   const logout = useCallback(async (): Promise<void> => {
-    await authService.logout();
+    const currentRefreshToken = refreshToken;
+    await authService.logout(currentRefreshToken);
     clearSession();
-  }, [clearSession]);
+  }, [refreshToken, clearSession]);
 
   const hasRole = useCallback(
     (roles?: Role[]): boolean => {
@@ -128,6 +167,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       accessToken,
+      refreshToken,
       expiresAt,
       isAuthenticated: Boolean(user && accessToken),
       isLoading,
@@ -135,7 +175,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       logout,
       hasRole,
     }),
-    [user, accessToken, expiresAt, isLoading, login, logout, hasRole],
+    [user, accessToken, refreshToken, expiresAt, isLoading, login, logout, hasRole],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

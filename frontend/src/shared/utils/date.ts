@@ -27,6 +27,18 @@ const timeOnlyFormatter = new Intl.DateTimeFormat('es-MX', {
 });
 
 /**
+ * Converts a Date, timestamp, or local date string to an ISO 8601 UTC string (with trailing Z)
+ * to send to the API according to docs/api-contract.md.
+ */
+export function toUtcIsoString(input: Date | string | number = new Date()): IsoDate {
+  const date = input instanceof Date ? input : new Date(input);
+  if (Number.isNaN(date.getTime())) {
+    throw new Error('Fecha inválida para convertir a ISO 8601 UTC.');
+  }
+  return date.toISOString();
+}
+
+/**
  * Formats an ISO 8601 UTC date string into America/Matamoros local date and time.
  */
 export function formatMatamorosDateTime(isoUtc?: IsoDate | null): string {

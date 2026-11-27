@@ -10,9 +10,9 @@ export function MonitorPlaceholderPage() {
       featureBranch="feature/frontend-live-fleet-and-alerts"
       showLiveLegend
       highlights={[
-        'Visualización de unidades con estado calculado (OnRoute, Stopped, Deviated, NoSignal, Idle) acompañado siempre de ícono y etiqueta.',
-        'Antigüedad del último reporte GPS en formato relativo ("hace 45 s") y marca de tiempo en America/Matamoros.',
-        'Bandeja de alertas con máquina de estados (New → InReview → Resolved / Dismissed) y motivo obligatorio (≥ 5 caracteres).',
+        'Conexión WebSockets con @microsoft/signalr a /hubs/fleet (accessTokenFactory) escuchando UnitUpdated, AlertRaised y AlertUpdated, con fallback de polling cada 10 s.',
+        'Visualización de unidades con estado calculado (OnRoute, Stopped, Deviated, NoSignal, Idle) acompañado siempre de ícono, etiqueta y antigüedad relativa ("hace 45 s") en America/Matamoros.',
+        'Bandeja de alertas en tiempo real con máquina de estados (New → InReview → Resolved / Dismissed); las notificaciones por correo electrónico las despacha directamente el Backend.',
       ]}
       endpoints={[
         {

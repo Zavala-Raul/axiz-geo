@@ -16,7 +16,16 @@ export interface LoginRequest {
 export interface LoginResponse {
   accessToken: string;
   expiresAt: IsoDate;
+  refreshToken?: string | null;
   user: AuthUser;
+}
+
+export interface RefreshTokenRequest {
+  refreshToken: string;
+}
+
+export interface LogoutRequest {
+  refreshToken?: string | null;
 }
 
 export interface DemoAccountOption {

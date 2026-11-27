@@ -24,9 +24,12 @@ export class ApiError extends Error {
 }
 
 type UnauthorizedHandler = () => void;
+type TokenRefreshHandler = () => Promise<string | null>;
 
 let unauthorizedHandler: UnauthorizedHandler | null = null;
 let accessTokenProvider: (() => string | null) | null = null;
+let tokenRefreshHandler: TokenRefreshHandler | null = null;
+let inflightRefreshPromise: Promise<string | null> | null = null;
 
 export function registerUnauthorizedHandler(handler: UnauthorizedHandler | null): void {
   unauthorizedHandler = handler;
@@ -36,13 +39,43 @@ export function registerAccessTokenProvider(provider: (() => string | null) | nu
   accessTokenProvider = provider;
 }
 
+/**
+ * Registers the callback that attempts a single POST /api/auth/refresh when a 401 is intercepted.
+ * Must return the new accessToken if rotation succeeds, or null if no refreshToken exists / refresh fails.
+ */
+export function registerTokenRefreshHandler(handler: TokenRefreshHandler | null): void {
+  tokenRefreshHandler = handler;
+}
+
+async function tryRefreshAccessTokenOnce(): Promise<string | null> {
+  if (!tokenRefreshHandler) {
+    return null;
+  }
+  if (!inflightRefreshPromise) {
+    inflightRefreshPromise = tokenRefreshHandler()
+      .catch(() => null)
+      .finally(() => {
+        inflightRefreshPromise = null;
+      });
+  }
+  return inflightRefreshPromise;
+}
+
 export interface RequestOptions extends Omit<RequestInit, 'body'> {
   body?: unknown;
   skipAuth?: boolean;
+  /** Internal flag to prevent infinite 401 refresh loops */
+  _isRetryAfterRefresh?: boolean;
 }
 
 async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
-  const { body, skipAuth = false, headers: customHeaders, ...rest } = options;
+  const {
+    body,
+    skipAuth = false,
+    _isRetryAfterRefresh = false,
+    headers: customHeaders,
+    ...rest
+  } = options;
 
   const headers = new Headers(customHeaders);
   if (!headers.has('Accept')) {
@@ -70,6 +103,21 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
+  // 401 Unauthorized Interceptor: attempt single dynamic token refresh if eligible
+  if (response.status === 401 && !skipAuth && !_isRetryAfterRefresh) {
+    const refreshedAccessToken = await tryRefreshAccessTokenOnce();
+    if (refreshedAccessToken) {
+      return request<T>(endpoint, {
+        ...options,
+        _isRetryAfterRefresh: true,
+      });
+    }
+
+    if (unauthorizedHandler) {
+      unauthorizedHandler();
+    }
+  }
+
   if (response.status === 204) {
     return undefined as T;
   }
@@ -88,7 +136,7 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
       }
     }
 
-    if (response.status === 401 && !skipAuth && unauthorizedHandler) {
+    if (response.status === 401 && !skipAuth && _isRetryAfterRefresh && unauthorizedHandler) {
       unauthorizedHandler();
     }
 

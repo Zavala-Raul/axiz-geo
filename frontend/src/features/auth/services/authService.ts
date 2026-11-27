@@ -1,5 +1,5 @@
 import { httpClient, USE_MOCKS } from '../../../shared/api/httpClient';
-import { mockGetMe, mockLogin } from '../mocks/authMock';
+import { mockGetMe, mockLogin, mockRefresh } from '../mocks/authMock';
 import type { AuthUser, LoginRequest, LoginResponse } from '../types';
 
 export const authService = {
@@ -10,6 +10,17 @@ export const authService = {
     return httpClient.post<LoginResponse>('/auth/login', credentials, { skipAuth: true });
   },
 
+  async refresh(refreshToken: string): Promise<LoginResponse> {
+    if (USE_MOCKS) {
+      return mockRefresh(refreshToken);
+    }
+    return httpClient.post<LoginResponse>(
+      '/auth/refresh',
+      { refreshToken },
+      { skipAuth: true },
+    );
+  },
+
   async getMe(currentToken: string | null): Promise<AuthUser> {
     if (USE_MOCKS) {
       return mockGetMe(currentToken);
@@ -17,14 +28,17 @@ export const authService = {
     return httpClient.get<AuthUser>('/auth/me');
   },
 
-  async logout(): Promise<void> {
+  async logout(refreshToken?: string | null): Promise<void> {
     if (USE_MOCKS) {
       return;
     }
     try {
-      await httpClient.post<void>('/auth/logout');
+      await httpClient.post<void>(
+        '/auth/logout',
+        refreshToken ? { refreshToken } : undefined,
+      );
     } catch {
-      // Local logout should succeed even if server token already expired
+      // Local session cleanup must always succeed even if server token already expired
     }
   },
 };
