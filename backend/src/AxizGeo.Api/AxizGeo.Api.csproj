@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>a692df35-9e08-4e55-bb63-921426bff9fe</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.14" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AxizGeo.Application\AxizGeo.Application.csproj" />
+    <ProjectReference Include="..\AxizGeo.Infrastructure\AxizGeo.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>
