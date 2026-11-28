@@ -39,11 +39,13 @@ public static class DependencyInjection
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
         services.Configure<OrsOptions>(configuration.GetSection(OrsOptions.SectionName));
         services.Configure<TelemetryRulesOptions>(configuration.GetSection(TelemetryRulesOptions.SectionName));
+        services.Configure<EmailNotificationOptions>(configuration.GetSection(EmailNotificationOptions.SectionName));
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IIdentityOperatorProvisioner, IdentityOperatorProvisioner>();
         services.AddScoped<IFleetNotifier, LoggingFleetNotifier>();
+        services.AddScoped<IAlertNotificationChannel, EmailAlertNotificationChannel>();
 
         var orsBaseUrl = configuration[$"{OrsOptions.SectionName}:BaseUrl"]
                          ?? "https://api.heigit.org/openrouteservice/";
