@@ -186,3 +186,16 @@ Se implementó `IExceptionHandler` para traducir de forma uniforme las excepcion
 ### 10.4 Verificación de Salud PostgreSQL (`/health`) y CORS para Previews de Vercel
 - El endpoint `/health` comprueba conectividad real contra PostgreSQL (`CanConnectAsync` con timeout de 2 s), devolviendo `503 Service Unavailable` en producción si la base de datos no responde.
 - La política CORS admite tanto orígenes explícitos (`Cors:AllowedOrigins`) como URLs efímeras de *Preview Deployments* en Vercel bajo prefijo controlado (`Cors:VercelPreviewPrefix`).
+
+---
+
+## Fase 11 — Goal 6: Renovación Dinámica de JWT (`RefreshToken`) y Canal de Alertas por Correo SMTP (`feature/backend-refresh-and-email`)
+
+### 11.1 Sesiones Dinámicas con Rotación y Revocación de `RefreshToken` (`refresh_tokens`, `POST /api/auth/refresh`)
+- **Almacenamiento seguro con SHA-256**: El servidor genera un token criptográfico aleatorio de 256 bits (`RandomNumberGenerator`), entrega el valor opaco en `LoginResponse.refreshToken` y almacena en PostgreSQL únicamente su resumen `SHA-256` (`TokenHash` con índice `UNIQUE`).
+- **JWT corto + Rotación atómica**: El `accessToken` reduce su vigencia a **30 minutos** (`Jwt:ExpirationMinutes = 30`). Cuando el interceptor del cliente detecta expiración (`401`), invoca `POST /api/auth/refresh`: el backend verifica vigencia, revoca el `RefreshToken` anterior registrando `ReplacedByTokenHash`, valida que la cuenta siga activa (`IsActive == true`) y emite un nuevo par `{ accessToken, refreshToken }`.
+- **Revocación inmediata**: Tanto `POST /api/auth/logout` como la desactivación administrativa de un operador en `OperatorsController` revocan sus `RefreshTokens` activos en base de datos, impidiendo renovar sesión.
+
+### 11.2 Notificaciones de Alertas por Correo Electrónico SMTP (`EmailAlertNotificationChannel`)
+- Implementa la interfaz `IAlertNotificationChannel` conectándose de forma limpia al despachador **Observer** (`SignalRFleetNotifier`) sin modificar el motor de reglas (**Principio Abierto/Cerrado — OCP**).
+- Construye plantillas HTML corporativas de **Axiz Geo** con severidad, unidad, operador, hora convertida a `America/Matamoros` y enlace directo al punto exacto en **OpenStreetMap**, operando de manera tolerante a fallos cuando `Notifications:Email:Enabled` está desactivado.

@@ -16,6 +16,15 @@ public sealed class LoginRequestValidator : AbstractValidator<LoginRequest>
     }
 }
 
+public sealed class RefreshTokenRequestValidator : AbstractValidator<RefreshTokenRequest>
+{
+    public RefreshTokenRequestValidator()
+    {
+        RuleFor(x => x.RefreshToken)
+            .NotEmpty().WithMessage("El refresh token es obligatorio.");
+    }
+}
+
 public sealed class CreateUnitRequestValidator : AbstractValidator<CreateUnitRequest>
 {
     public CreateUnitRequestValidator()

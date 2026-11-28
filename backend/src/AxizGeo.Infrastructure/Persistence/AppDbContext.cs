@@ -16,6 +16,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<Trip> Trips => Set<Trip>();
     public DbSet<Position> Positions => Set<Position>();
     public DbSet<Alert> Alerts => Set<Alert>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -26,6 +27,22 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         builder.Entity<ApplicationUser>(b =>
         {
             b.Property(u => u.FullName).HasMaxLength(150).IsRequired();
+        });
+
+        builder.Entity<RefreshToken>(b =>
+        {
+            b.ToTable("refresh_tokens");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.TokenHash).HasMaxLength(128).IsRequired();
+            b.HasIndex(x => x.TokenHash).IsUnique();
+            b.Property(x => x.ReplacedByTokenHash).HasMaxLength(128);
+
+            b.HasOne(x => x.User)
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasIndex(x => new { x.UserId, x.ExpiresAt });
         });
 
         builder.Entity<Unit>(b =>
