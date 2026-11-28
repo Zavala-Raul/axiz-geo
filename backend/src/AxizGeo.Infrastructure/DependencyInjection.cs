@@ -20,7 +20,14 @@ public static class DependencyInjection
             ?? "Host=localhost;Port=5432;Database=axiz_geo;Username=axiz_user;Password=axiz_dev_password_change_me";
 
         services.AddDbContext<AppDbContext>(options =>
-            options.UseNpgsql(connectionString, npgsql => npgsql.UseNetTopologySuite()));
+            options.UseNpgsql(connectionString, npgsql =>
+            {
+                npgsql.UseNetTopologySuite();
+                npgsql.EnableRetryOnFailure(
+                    maxRetryCount: 5,
+                    maxRetryDelay: TimeSpan.FromSeconds(5),
+                    errorCodesToAdd: null);
+            }));
 
         services.AddIdentityCore<ApplicationUser>(options =>
             {
