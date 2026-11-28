@@ -142,3 +142,24 @@ Se implementó `IExceptionHandler` para traducir de forma uniforme las excepcion
 ### 8.3 Layout Institucional Axiz Geo y Guard de Rutas (`ProtectedRoute` y `AppLayout`)
 - **`ProtectedRoute.tsx`**: Guard de navegación en React Router que protege rutas autenticadas y valida la matriz de permisos (`Admin`, `Monitor`, `Operator`), mostrando una vista explícita `HTTP 403 · Acceso Restringido por Rol` cuando un perfil intenta ingresar a un módulo no autorizado.
 - **`AppLayout.tsx`**: Shell principal con la identidad visual de Axiz Geo (`#213D71` azul profundo, `#AEAEB0` gris claro, `#CBC4B1` crema arena), menú lateral filtrado dinámicamente según el rol activo, reloj en vivo en `America/Matamoros`, indicador de salud del backend (`/health` o modo simulación) y etiquetas de estado accesibles que combinan siempre ícono y texto.
+
+---
+
+## Fase 9 — Goal 4: Ingesta de Telemetría, Motor de Reglas, Gestión de Alertas y Endurecimiento PostgreSQL (`feature/backend-telemetry-and-alerts`)
+
+### 9.1 Patrón Chain of Responsibility y Patrón Factory (`AxizGeo.Application/Rules` y `Alerts`)
+- **`TelemetryPipeline` (`ITelemetryRule`)**: Evalúa cada coordenada entrante mediante una cadena desacoplada y ordenada:
+  1. `AccuracyRule` (`Order = 10`): Si `AccuracyMeters > 50 m`, marca `StopProcessing = true` (la posición se almacena con fines de trazabilidad, pero corta la cadena evitando falsas alarmas por rebote de señal GPS).
+  2. `DeviationRule` (`Order = 20`): Calcula la distancia perpendicular al corredor con `ICorridorEvaluator`; confirma una desviación únicamente cuando detecta **2 posiciones válidas consecutivas** fuera del margen autorizado y verifica que no exista ya una alerta `Deviation` abierta para ese viaje (control anti-spam).
+  3. `RestrictedZoneRule` (`Order = 30`): Evalúa inclusión en geocercas activas de tipo `Restricted` usando `GeofenceEvaluatorResolver` y levanta alerta de severidad `High`.
+- **`AlertFactory`**: Centraliza la construcción de alertas (`Deviation`, `RestrictedZone`, `NoSignal`) con mensajes descriptivos en español y detección automática de alertas históricas (`IsHistorical = true` cuando el lote llega con más de 2 minutos de desfase tras una pérdida de conexión).
+
+### 9.2 Ingesta Idempotente (`POST /api/telemetry/batch`), Alertas (`/api/alerts`) y Monitor de Señal
+- **`TelemetryService` y `TelemetryController`**: Procesa lotes de hasta 500 posiciones ordenados cronológicamente por `CapturedAt`, ignora sin error `id` duplicados (idempotencia en reconexiones), valida que un `Operator` solo reporte en su propio viaje `InProgress` y persiste posiciones, alertas y `LastPositionAt` en **una única transacción** (`IUnitOfWork.SaveChangesAsync`).
+- **`AlertService` y `AlertsController`**: Consulta paginada con filtro múltiple (`?status=New,InReview`), transición a revisión (`/review`), resolución (`/resolve`) y descarte por falsa alarma (`/dismiss`) delegando las invariantes al **Patrón State** (`AlertState`).
+- **`NoSignalMonitorBackgroundService`**: Proceso en segundo plano (`BackgroundService`) que inspecciona cada 30 segundos los viajes `InProgress` cuya última posición supere el umbral configurable (`NoSignalMinutes = 3`) y emite alerta `NoSignal`.
+
+### 9.3 Endurecimiento de Base de Datos en PostgreSQL (`AddDatabaseConstraintsAndTriggers`)
+- **Índices únicos parciales (`WHERE`)**: `IX_trips_UnitId_Active`, `IX_trips_OperatorId_Active` (`WHERE "Status" = 'InProgress'`) e `IX_alerts_TripId_Type_Open` (`WHERE "Status" IN ('New', 'InReview')`) para impedir condiciones de carrera directamente en el motor PostgreSQL.
+- **Restricciones `CHECK`**: Validaciones físicas en tablas (`CK_units_Year`, `CK_routes_CorridorMeters`, `CK_geofences_RadiusMeters`, `CK_positions_AccuracyMeters`).
+- **Función y Triggers PL/pgSQL (`fn_set_updated_at`)**: Trigger `BEFORE UPDATE` sobre `units`, `operators`, `routes`, `geofences`, `trips` y `alerts` que actualiza automáticamente la columna de auditoría `UpdatedAt` en UTC.
