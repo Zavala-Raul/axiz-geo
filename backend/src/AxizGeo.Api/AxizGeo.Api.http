@@ -1,6 +1,48 @@
-@AxizGeo.Api_HostAddress = http://localhost:5016
+@baseUrl = http://localhost:5080
+@token = PEGA_AQUI_TU_ACCESS_TOKEN
 
-GET {{AxizGeo.Api_HostAddress}}/weatherforecast/
+### 1. Verificar salud de API y conexión PostgreSQL + PostGIS
+GET {{baseUrl}}/health
 Accept: application/json
 
-###
+### 2. Iniciar sesión como Monitor (semilla demo)
+# @name loginMonitor
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "monitor@axiz.demo",
+  "password": "Demo123!"
+}
+
+### 3. Consultar perfil actual
+GET {{baseUrl}}/api/auth/me
+Authorization: Bearer {{token}}
+
+### 4. Consultar flota en vivo
+GET {{baseUrl}}/api/fleet/live
+Authorization: Bearer {{token}}
+
+### 5. Resumen ejecutivo del Dashboard
+GET {{baseUrl}}/api/dashboard/summary
+Authorization: Bearer {{token}}
+
+### 6. Listar unidades de carga
+GET {{baseUrl}}/api/units
+Authorization: Bearer {{token}}
+
+### 7. Listar rutas autorizadas
+GET {{baseUrl}}/api/routes
+Authorization: Bearer {{token}}
+
+### 8. Listar geocercas (permitidas y restringidas)
+GET {{baseUrl}}/api/geofences
+Authorization: Bearer {{token}}
+
+### 9. Listar viajes
+GET {{baseUrl}}/api/trips
+Authorization: Bearer {{token}}
+
+### 10. Consultar bandeja de alertas abiertas
+GET {{baseUrl}}/api/alerts?status=New,InReview
+Authorization: Bearer {{token}}
