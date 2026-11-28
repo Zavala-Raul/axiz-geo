@@ -8,8 +8,18 @@ namespace AxizGeo.Api.Controllers;
 [ApiController]
 [Route("api/units")]
 [Authorize(Roles = "Admin,Monitor")]
-public sealed class UnitsController(UnitService unitService) : ControllerBase
+public sealed class UnitsController(UnitService unitService, FleetQueryService fleetQueryService) : ControllerBase
 {
+    [HttpGet("{id:guid}/track")]
+    public async Task<ActionResult<TrackDto>> GetTrack(
+        Guid id,
+        [FromQuery] DateTime? from = null,
+        [FromQuery] DateTime? to = null,
+        CancellationToken ct = default)
+    {
+        var track = await fleetQueryService.GetUnitTrackAsync(id, from, to, ct);
+        return Ok(track);
+    }
     [HttpGet]
     public async Task<ActionResult<PagedResult<UnitDto>>> List(
         [FromQuery] string? search = null,

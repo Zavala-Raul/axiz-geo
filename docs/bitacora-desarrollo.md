@@ -163,3 +163,26 @@ Se implementó `IExceptionHandler` para traducir de forma uniforme las excepcion
 - **Índices únicos parciales (`WHERE`)**: `IX_trips_UnitId_Active`, `IX_trips_OperatorId_Active` (`WHERE "Status" = 'InProgress'`) e `IX_alerts_TripId_Type_Open` (`WHERE "Status" IN ('New', 'InReview')`) para impedir condiciones de carrera directamente en el motor PostgreSQL.
 - **Restricciones `CHECK`**: Validaciones físicas en tablas (`CK_units_Year`, `CK_routes_CorridorMeters`, `CK_geofences_RadiusMeters`, `CK_positions_AccuracyMeters`).
 - **Función y Triggers PL/pgSQL (`fn_set_updated_at`)**: Trigger `BEFORE UPDATE` sobre `units`, `operators`, `routes`, `geofences`, `trips` y `alerts` que actualiza automáticamente la columna de auditoría `UpdatedAt` en UTC.
+
+---
+
+## Fase 10 — Goal 5: Flota en Vivo, Historial por Periodos (12 h), SignalR y Salud de BD (`feature/backend-live-fleet-and-realtime`)
+
+### 10.1 Monitoreo de Flota en Vivo y Dashboard (`FleetQueryService`, `/api/fleet/live`, `/api/dashboard/summary`)
+- **`FleetReadRepository`**: Consulta optimizada sin `N+1` que consolida unidades activas, viajes `InProgress`, última posición reportada y conteo de alertas abiertas (`New`, `InReview`).
+- **`CalculateLiveStatus`**: Clasifica determinísticamente el estado operativo de cada unidad (`Idle`, `NoSignal`, `Deviated`, `Stopped`, `OnRoute`) considerando antigüedad del reporte (`> 3 min`), permanencia en el corredor autorizado y velocidad actual.
+
+### 10.2 Historial de Recorrido por Periodos de 12 Horas (`GET /api/units/{id}/track`)
+- Consulta acotada (por defecto últimas **12 horas**, máximo 7 días) devolviendo `TrackDto` con:
+  - `LineString` del recorrido (aplicando simplificación topológica **Douglas-Peucker** cuando supera 1,500 puntos para mantener fluidez en MapLibre GL).
+  - Puntos detallados con hora UTC, velocidad, precisión e indicador `insideCorridor`.
+  - Viajes asociados en la ventana temporal para superponer el corredor autorizado debajo del trazo real.
+  - Línea de tiempo cronológica de eventos (`TripStarted`, `TripFinished`, `Alert` y detección automática de paradas prolongadas `Stop` ≥ 5 min).
+
+### 10.3 Patrón Observer en Tiempo Real con SignalR (`FleetHub` y `SignalRFleetNotifier`)
+- **`/hubs/fleet`**: Hub autenticado para roles `Admin` y `Monitor` que agrupa las conexiones activas en `"monitors"`.
+- **`SignalRFleetNotifier` (`IFleetNotifier`)**: Publica en tiempo real `UnitUpdated`, `AlertRaised` y `AlertUpdated`, e invoca de forma aislada cualquier `IAlertNotificationChannel` externo registrado (dejando listo el punto de extensión para notificaciones por correo SMTP).
+
+### 10.4 Verificación de Salud PostgreSQL (`/health`) y CORS para Previews de Vercel
+- El endpoint `/health` comprueba conectividad real contra PostgreSQL (`CanConnectAsync` con timeout de 2 s), devolviendo `503 Service Unavailable` en producción si la base de datos no responde.
+- La política CORS admite tanto orígenes explícitos (`Cors:AllowedOrigins`) como URLs efímeras de *Preview Deployments* en Vercel bajo prefijo controlado (`Cors:VercelPreviewPrefix`).

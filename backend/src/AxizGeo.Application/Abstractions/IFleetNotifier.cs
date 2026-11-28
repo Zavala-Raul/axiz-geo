@@ -3,7 +3,15 @@ using AxizGeo.Application.DTOs;
 namespace AxizGeo.Application.Abstractions;
 
 /// <summary>
-/// Patrón Observer (puerto de salida): publica eventos de posiciones y alertas hacia canales suscritos (SignalR, Correo, etc.).
+/// Canal enchufable de notificación externa para alertas (ej. Correo SMTP), desacoplado del motor de reglas.
+/// </summary>
+public interface IAlertNotificationChannel
+{
+    Task SendAlertAsync(AlertDto alert, CancellationToken ct = default);
+}
+
+/// <summary>
+/// Patrón Observer (puerto de salida): publica eventos de posiciones y alertas hacia paneles suscritos y canales externos.
 /// </summary>
 public interface IFleetNotifier
 {

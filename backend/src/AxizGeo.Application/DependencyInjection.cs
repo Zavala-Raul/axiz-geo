@@ -34,6 +34,7 @@ public static class DependencyInjection
         services.AddScoped<TripService>();
         services.AddScoped<TelemetryService>();
         services.AddScoped<AlertService>();
+        services.AddScoped<FleetQueryService>();
 
         return services;
     }
