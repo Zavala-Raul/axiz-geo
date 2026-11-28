@@ -1,52 +1,108 @@
-import { useEffect, useState } from 'react';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
+import { AuthProvider } from './features/auth/context/AuthContext';
+import { useAuth } from './features/auth/hooks/useAuth';
+import { LoginPage } from './features/auth/pages/LoginPage';
+import { getDefaultRouteForRole } from './features/auth/utils/roleRoutes';
+import { AppLayout } from './shared/components/AppLayout';
+import { ProtectedRoute } from './shared/components/ProtectedRoute';
+import {
+  GeofencesPlaceholderPage,
+  HistoryPlaceholderPage,
+  MonitorPlaceholderPage,
+  OperatorsCatalogPlaceholderPage,
+  SimulatorPlaceholderPage,
+  TripsPlaceholderPage,
+  UnitsCatalogPlaceholderPage,
+} from './shared/pages/ModulePlaceholderPages';
 
-interface HealthStatus {
-  status: string;
-  service?: string;
+function RootRedirect() {
+  const { isAuthenticated, user } = useAuth();
+  if (!isAuthenticated || !user) {
+    return <Navigate to="/login" replace />;
+  }
+  return <Navigate to={getDefaultRouteForRole(user.role)} replace />;
 }
 
-const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:5080/api';
-
 export function App() {
-  const [apiState, setApiState] = useState<string>('Verificando conexión con API...');
-
-  useEffect(() => {
-    const controller = new AbortController();
-    const healthUrl = API_BASE.replace(/\/api\/?$/, '') + '/health';
-
-    fetch(healthUrl, { signal: controller.signal })
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = (await res.json()) as HealthStatus;
-        setApiState(`Conectado (${data.status})`);
-      })
-      .catch((err: unknown) => {
-        if (err instanceof DOMException && err.name === 'AbortError') return;
-        setApiState('API no disponible en este momento (inicia el backend en localhost:5080)');
-      });
-
-    return () => controller.abort();
-  }, []);
-
   return (
-    <div className="app-shell">
-      <header className="topbar">
-        <h1>AXIZ GEO</h1>
-        <span>Tecnología que orienta</span>
-      </header>
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
 
-      <main className="content">
-        <section className="card">
-          <h2>Panel de Monitoreo y Geocercas</h2>
-          <p>
-            Base inicial de la SPA en <strong>React 19 + TypeScript</strong> lista para desarrollo modular.
-          </p>
-          <p>
-            <strong>Estado del Backend (.NET 10):</strong> {apiState}
-          </p>
-        </section>
-      </main>
-    </div>
+          <Route element={<ProtectedRoute />}>
+            <Route element={<AppLayout />}>
+              <Route index element={<RootRedirect />} />
+
+              <Route
+                path="/monitor"
+                element={
+                  <ProtectedRoute allowedRoles={['Admin', 'Monitor']}>
+                    <MonitorPlaceholderPage />
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/geocercas"
+                element={
+                  <ProtectedRoute allowedRoles={['Admin', 'Monitor', 'Operator']}>
+                    <GeofencesPlaceholderPage />
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/viajes"
+                element={
+                  <ProtectedRoute allowedRoles={['Admin', 'Monitor', 'Operator']}>
+                    <TripsPlaceholderPage />
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/catalogos/unidades"
+                element={
+                  <ProtectedRoute allowedRoles={['Admin', 'Monitor']}>
+                    <UnitsCatalogPlaceholderPage />
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/catalogos/operadores"
+                element={
+                  <ProtectedRoute allowedRoles={['Admin', 'Monitor']}>
+                    <OperatorsCatalogPlaceholderPage />
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/historial"
+                element={
+                  <ProtectedRoute allowedRoles={['Admin', 'Monitor']}>
+                    <HistoryPlaceholderPage />
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/simulador"
+                element={
+                  <ProtectedRoute allowedRoles={['Admin', 'Operator']}>
+                    <SimulatorPlaceholderPage />
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route path="*" element={<RootRedirect />} />
+            </Route>
+          </Route>
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
 

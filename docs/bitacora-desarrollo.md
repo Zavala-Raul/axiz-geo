@@ -124,3 +124,21 @@ Se implementó `IExceptionHandler` para traducir de forma uniforme las excepcion
 ### 7.3 Geocercas GeoJSON (`/api/geofences`) y Ciclo de Vida de Viajes (`/api/trips`)
 - **`GeoJsonMapper` y `GeofencesController`**: Mapea y valida coordenadas `[longitud, latitud]`, anillos cerrados sin auto-intersección (`IsValid`) y serialización limpia de `Point` y `Polygon` para consumo directo desde Terra Draw y MapLibre GL.
 - **`TripService` y `TripsController`**: Gestiona programación (`POST /api/trips`), consulta propia del operador (`GET /api/trips/mine`), detalle con trazo de ruta incluido (`GET /api/trips/{id}`), inicio (`POST /api/trips/{id}/start`), finalización (`/finish`) y cancelación (`/cancel`), garantizando que un operador nunca pueda consultar ni accionar viajes ajenos (`403 Forbidden`) ni iniciar viajes simultáneos (`409 Conflict`).
+
+---
+
+## Fase 8 — Autenticación por Roles, Interceptor de Refresh Token, Layout Institucional y Ruteo Protegido en Frontend (`feature/frontend-auth-and-layout`)
+
+### 8.1 Arquitectura Modular por Features, Fechas UTC y Cliente HTTP con Refresh Token (`src/shared/`)
+- **`src/shared/types/api.ts`**: Definición estricta en TypeScript de todos los DTOs, enumeraciones como strings (`Role`, `TripStatus`, `GeofenceType`, `GeofenceKind`, `AlertType`, `AlertStatus`, `AlertSeverity`, `LiveStatus`), geometrías GeoJSON (`[longitud, latitud]` SRID 4326) y errores `ProblemDetails` (RFC 9457) alineados con `docs/api-contract.md`.
+- **`src/shared/utils/date.ts`**: Conversión estandarizada de fechas salientes en ISO 8601 UTC (`toUtcIsoString()`) y formateo de marcas de tiempo entrantes (`Z`) hacia la zona horaria fronteriza `America/Matamoros`, además del cálculo de antigüedad relativa (`"hace 45 s"`).
+- **`src/shared/api/httpClient.ts`**: Cliente HTTP centralizado que adjunta `Authorization: Bearer <accessToken>`, procesa errores `ProblemDetails` e implementa un **interceptor automático de `401 Unauthorized`**: si existe `refreshToken` en sesión, intenta una sola vez `POST /api/auth/refresh` (deduplicando peticiones concurrentes en vuelo), actualiza `{ accessToken, expiresAt, refreshToken }` en el store y reintenta la petición original automáticamente; si no hay `refreshToken` o la rotación responde `401`, limpia la sesión y redirige a `/login`.
+
+### 8.2 Módulo de Autenticación y Patrones en Frontend (`src/features/auth/`)
+- **Separación Container / Presentational**: `LoginPage.tsx` (contenedor con lógica de estado, redirección por rol y manejo de errores) desacoplado de `LoginForm.tsx` (componente presentacional puro con selector rápido de las 5 cuentas semilla de demostración y logotipo oficial `axiz_logo.png`).
+- **Custom Hook y Context (`AuthContext` + `useAuth`)**: Gestión centralizada de sesión (`{ accessToken, expiresAt, refreshToken, user }`) persistida en `localStorage`, registro del manejador de rotación de token ante el `httpClient`, revalidación con `GET /api/auth/me`, envío de `{ refreshToken }` en `POST /api/auth/logout` y verificación de permisos por rol (`hasRole`).
+- **Conmutación limpia Mock / API Real (`VITE_USE_MOCKS`)**: `authService.ts` alterna de forma transparente entre `/api/auth/login`, `/api/auth/refresh`, `/api/auth/me` y `/api/auth/logout` del backend .NET 10 y `authMock.ts` sin acoplar los componentes de UI.
+
+### 8.3 Layout Institucional Axiz Geo y Guard de Rutas (`ProtectedRoute` y `AppLayout`)
+- **`ProtectedRoute.tsx`**: Guard de navegación en React Router que protege rutas autenticadas y valida la matriz de permisos (`Admin`, `Monitor`, `Operator`), mostrando una vista explícita `HTTP 403 · Acceso Restringido por Rol` cuando un perfil intenta ingresar a un módulo no autorizado.
+- **`AppLayout.tsx`**: Shell principal con la identidad visual de Axiz Geo (`#213D71` azul profundo, `#AEAEB0` gris claro, `#CBC4B1` crema arena), menú lateral filtrado dinámicamente según el rol activo, reloj en vivo en `America/Matamoros`, indicador de salud del backend (`/health` o modo simulación) y etiquetas de estado accesibles que combinan siempre ícono y texto.
