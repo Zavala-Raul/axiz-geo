@@ -72,6 +72,16 @@ public interface IAlertRepository : IRepository<Alert>
 {
     Task<Alert?> GetWithDetailsAsync(Guid id, CancellationToken ct = default);
     Task<bool> HasOpenAlertAsync(Guid tripId, AlertType type, CancellationToken ct = default);
+    Task<IReadOnlyList<AlertType>> GetOpenAlertTypesAsync(Guid tripId, CancellationToken ct = default);
+    Task<(IReadOnlyList<Alert> Items, int TotalCount)> ListPagedAsync(
+        IReadOnlyList<AlertStatus>? statuses,
+        AlertType? type,
+        Guid? unitId,
+        DateTime? fromUtc,
+        DateTime? toUtc,
+        int page,
+        int pageSize,
+        CancellationToken ct = default);
 }
 
 /// <summary>
