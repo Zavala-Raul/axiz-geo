@@ -2,10 +2,14 @@ using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using AxizGeo.Api.BackgroundJobs;
+using AxizGeo.Api.Hubs;
 using AxizGeo.Api.Infrastructure;
+using AxizGeo.Api.Realtime;
 using AxizGeo.Application;
+using AxizGeo.Application.Abstractions;
 using AxizGeo.Infrastructure;
 using AxizGeo.Infrastructure.Identity;
+using AxizGeo.Infrastructure.Persistence;
 using AxizGeo.Infrastructure.Persistence.Seed;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -17,6 +21,14 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+
+builder.Services.AddSignalR()
+    .AddJsonProtocol(options =>
+    {
+        options.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    });
+
+builder.Services.AddScoped<IFleetNotifier, SignalRFleetNotifier>();
 builder.Services.AddHostedService<NoSignalMonitorBackgroundService>();
 
 var jwtSection = builder.Configuration.GetSection(JwtOptions.SectionName);
@@ -92,15 +104,33 @@ builder.Services.AddControllers()
 builder.Services.AddOpenApi();
 builder.Services.AddHealthChecks();
 
-var allowedOrigins = builder.Configuration
+var allowedOrigins = (builder.Configuration
     .GetSection("Cors:AllowedOrigins")
-    .Get<string[]>() ?? ["http://localhost:5173"];
+    .Get<string[]>() ?? ["http://localhost:5173"])
+    .Select(o => o.TrimEnd('/'))
+    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+var vercelPreviewPrefix = builder.Configuration["Cors:VercelPreviewPrefix"];
 
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("FrontendPolicy", policy =>
     {
-        policy.WithOrigins(allowedOrigins)
+        policy.SetIsOriginAllowed(origin =>
+              {
+                  var normalized = origin.TrimEnd('/');
+                  if (allowedOrigins.Contains(normalized))
+                      return true;
+
+                  if (!string.IsNullOrWhiteSpace(vercelPreviewPrefix) &&
+                      normalized.StartsWith(vercelPreviewPrefix, StringComparison.OrdinalIgnoreCase) &&
+                      normalized.EndsWith(".vercel.app", StringComparison.OrdinalIgnoreCase))
+                  {
+                      return true;
+                  }
+
+                  return false;
+              })
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -127,7 +157,37 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapHealthChecks("/health");
+app.MapGet("/health", async (AppDbContext db, IHostEnvironment env, CancellationToken ct) =>
+{
+    using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+    cts.CancelAfter(TimeSpan.FromSeconds(2));
+
+    var dbHealthy = false;
+    try
+    {
+        dbHealthy = await db.Database.CanConnectAsync(cts.Token);
+    }
+    catch
+    {
+        dbHealthy = false;
+    }
+
+    if (!dbHealthy && !env.IsDevelopment())
+    {
+        return Results.Json(
+            new { status = "Unhealthy", database = "Unreachable", service = "axiz-geo-api" },
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+
+    return Results.Ok(new
+    {
+        status = "Healthy",
+        database = dbHealthy ? "Healthy" : "Disconnected",
+        service = "axiz-geo-api"
+    });
+}).AllowAnonymous();
+
+app.MapHub<FleetHub>("/hubs/fleet");
 app.MapControllers();
 
 app.Run();
