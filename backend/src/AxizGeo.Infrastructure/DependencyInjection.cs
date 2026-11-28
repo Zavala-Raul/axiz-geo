@@ -1,5 +1,7 @@
 using AxizGeo.Application.Abstractions;
+using AxizGeo.Application.Rules;
 using AxizGeo.Infrastructure.Identity;
+using AxizGeo.Infrastructure.Notifications;
 using AxizGeo.Infrastructure.Persistence;
 using AxizGeo.Infrastructure.Repositories;
 using AxizGeo.Infrastructure.Routing;
@@ -36,10 +38,12 @@ public static class DependencyInjection
 
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
         services.Configure<OrsOptions>(configuration.GetSection(OrsOptions.SectionName));
+        services.Configure<TelemetryRulesOptions>(configuration.GetSection(TelemetryRulesOptions.SectionName));
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IIdentityOperatorProvisioner, IdentityOperatorProvisioner>();
+        services.AddScoped<IFleetNotifier, LoggingFleetNotifier>();
 
         var orsBaseUrl = configuration[$"{OrsOptions.SectionName}:BaseUrl"]
                          ?? "https://api.heigit.org/openrouteservice/";

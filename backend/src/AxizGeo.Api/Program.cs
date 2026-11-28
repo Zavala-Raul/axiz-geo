@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
+using AxizGeo.Api.BackgroundJobs;
 using AxizGeo.Api.Infrastructure;
 using AxizGeo.Application;
 using AxizGeo.Infrastructure;
@@ -16,6 +17,7 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddHostedService<NoSignalMonitorBackgroundService>();
 
 var jwtSection = builder.Configuration.GetSection(JwtOptions.SectionName);
 var jwtIssuer = jwtSection["Issuer"] ?? "axiz-geo-api";

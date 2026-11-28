@@ -24,6 +24,7 @@ public class Trip
     public DateTime? LastPositionAt { get; set; }
     public string? Notes { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     public ICollection<Position> Positions { get; set; } = [];
     public ICollection<Alert> Alerts { get; set; } = [];

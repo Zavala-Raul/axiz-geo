@@ -242,4 +242,51 @@ public class AlertRepository(AppDbContext db) : Repository<Alert>(db), IAlertRep
         Set.AnyAsync(a => a.TripId == tripId &&
                           a.Type == type &&
                           (a.Status == AlertStatus.New || a.Status == AlertStatus.InReview), ct);
+
+    public async Task<IReadOnlyList<AlertType>> GetOpenAlertTypesAsync(Guid tripId, CancellationToken ct = default) =>
+        await Set.AsNoTracking()
+            .Where(a => a.TripId == tripId && (a.Status == AlertStatus.New || a.Status == AlertStatus.InReview))
+            .Select(a => a.Type)
+            .Distinct()
+            .ToListAsync(ct);
+
+    public async Task<(IReadOnlyList<Alert> Items, int TotalCount)> ListPagedAsync(
+        IReadOnlyList<AlertStatus>? statuses,
+        AlertType? type,
+        Guid? unitId,
+        DateTime? fromUtc,
+        DateTime? toUtc,
+        int page,
+        int pageSize,
+        CancellationToken ct = default)
+    {
+        var query = Set.AsNoTracking()
+            .Include(a => a.Trip)
+                .ThenInclude(t => t.Unit)
+            .Include(a => a.Trip)
+                .ThenInclude(t => t.Operator)
+            .Include(a => a.Trip)
+                .ThenInclude(t => t.Route)
+            .AsQueryable();
+
+        if (statuses is { Count: > 0 })
+            query = query.Where(a => statuses.Contains(a.Status));
+        if (type.HasValue)
+            query = query.Where(a => a.Type == type.Value);
+        if (unitId.HasValue)
+            query = query.Where(a => a.Trip.UnitId == unitId.Value);
+        if (fromUtc.HasValue)
+            query = query.Where(a => a.CreatedAt >= fromUtc.Value);
+        if (toUtc.HasValue)
+            query = query.Where(a => a.CreatedAt <= toUtc.Value);
+
+        var total = await query.CountAsync(ct);
+        var items = await query
+            .OrderByDescending(a => a.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        return (items, total);
+    }
 }
