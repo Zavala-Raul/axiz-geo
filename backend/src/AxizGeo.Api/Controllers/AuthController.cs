@@ -3,6 +3,7 @@ using AxizGeo.Application.Abstractions;
 using AxizGeo.Application.DTOs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.RateLimiting;
 
 namespace AxizGeo.Api.Controllers;
@@ -20,6 +21,15 @@ public sealed class AuthController(IAuthService authService) : ControllerBase
         return Ok(response);
     }
 
+    [HttpPost("refresh")]
+    [AllowAnonymous]
+    [EnableRateLimiting("login")]
+    public async Task<ActionResult<LoginResponse>> Refresh([FromBody] RefreshTokenRequest request, CancellationToken ct)
+    {
+        var response = await authService.RefreshAsync(request, ct);
+        return Ok(response);
+    }
+
     [HttpGet("me")]
     [Authorize]
     public async Task<ActionResult<CurrentUserDto>> Me(CancellationToken ct)
@@ -30,5 +40,11 @@ public sealed class AuthController(IAuthService authService) : ControllerBase
 
     [HttpPost("logout")]
     [Authorize]
-    public IActionResult Logout() => NoContent();
+    public async Task<IActionResult> Logout(
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] LogoutRequest? request = null,
+        CancellationToken ct = default)
+    {
+        await authService.LogoutAsync(User.GetUserId(), request?.RefreshToken, ct);
+        return NoContent();
+    }
 }

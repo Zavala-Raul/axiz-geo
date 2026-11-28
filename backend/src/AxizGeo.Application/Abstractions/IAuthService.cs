@@ -16,6 +16,8 @@ public interface IJwtTokenGenerator
 public interface IAuthService
 {
     Task<LoginResponse> LoginAsync(LoginRequest request, CancellationToken ct = default);
+    Task<LoginResponse> RefreshAsync(RefreshTokenRequest request, CancellationToken ct = default);
+    Task LogoutAsync(Guid userId, string? refreshToken, CancellationToken ct = default);
     Task<CurrentUserDto> GetCurrentUserAsync(Guid userId, CancellationToken ct = default);
 }
 
