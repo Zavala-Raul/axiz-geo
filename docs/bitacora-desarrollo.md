@@ -104,3 +104,23 @@ Se implementó `IExceptionHandler` para traducir de forma uniforme las excepcion
 ### 6.3 CRUD de Catálogos con Patrón DTO y Validadores (`UnitsController` y `OperatorsController`)
 - **Unidades (`/api/units`)**: Consulta paginada con búsqueda por número económico, placas, marca o modelo (`Admin,Monitor`), alta, edición y baja lógica (`Admin`). Valida dimensiones físicas (`HeightMeters`, `WeightTons`), unicidad de `EconomicNumber` e impide desactivar una unidad que tenga un viaje `InProgress` (`409 Conflict`).
 - **Operadores (`/api/operators`)**: Consulta paginada (`Admin,Monitor`), alta (`Admin`) aprovisionando automáticamente su cuenta `ApplicationUser` con rol `Operator` mediante el puerto desacoplado `IIdentityOperatorProvisioner`, edición sincronizada y baja lógica protegida si existe viaje activo.
+
+---
+
+## Fase 7 — Goal 3: Geocercas (Strategy), Rutas de Tractocamión (Adapter) y Viajes (`feature/backend-geofences-routes-trips`)
+
+### 7.1 Patrón Strategy para Evaluación Geoespacial (`AxizGeo.Application/Geofencing`)
+- **Problema que resuelve**: El sistema maneja geocercas circulares (`Point` + `RadiusMeters`), geocercas poligonales (`Polygon`) y corredores de ruta (`LineString` + `CorridorMeters`). Para evitar condicionales acoplados al evaluar telemetría, se definieron estrategias intercambiables registradas por Inyección de Dependencias:
+  - `CircleGeofenceEvaluator` (`IGeofenceEvaluator`): calcula distancia geodésica esférica exacta (fórmula de Haversine en metros) respecto al centro.
+  - `PolygonGeofenceEvaluator` (`IGeofenceEvaluator`): evalúa inclusión topológica OGC (`Covers`) sobre el polígono.
+  - `GeofenceEvaluatorResolver`: selecciona en `O(1)` la estrategia correspondiente al `GeofenceType`.
+  - `CorridorEvaluator` (`ICorridorEvaluator`): proyecta coordenadas sobre cada segmento del `LineString` usando proyección equirectangular local centrada en la latitud evaluada para medir en metros la desviación perpendicular al eje autorizado.
+
+### 7.2 Patrón Adapter para Ruteo de Vehículo Pesado (`OpenRouteServiceAdapter` y `/api/routes`)
+- **Problema que resuelve**: Aísla el dominio respecto del contrato JSON externo de HeiGIT OpenRouteService (`api.heigit.org/openrouteservice/v2/directions/driving-hgv/geojson`) y oculta la `ApiKey` en el servidor.
+- Configura `HttpClient` con resiliencia estándar (`Microsoft.Extensions.Http.Resilience`), envía radios de tolerancia (`1000 m`) por waypoint y restricciones físicas (`height`, `weight`) cuando se indica una unidad (`unitId`), traduciendo errores externos (ej. código `2010`) a mensajes legibles (`400` / `502`).
+- Expone `POST /api/routes/preview` y el CRUD completo de `/api/routes` registrando al usuario autor de cada ruta o cambio autorizado.
+
+### 7.3 Geocercas GeoJSON (`/api/geofences`) y Ciclo de Vida de Viajes (`/api/trips`)
+- **`GeoJsonMapper` y `GeofencesController`**: Mapea y valida coordenadas `[longitud, latitud]`, anillos cerrados sin auto-intersección (`IsValid`) y serialización limpia de `Point` y `Polygon` para consumo directo desde Terra Draw y MapLibre GL.
+- **`TripService` y `TripsController`**: Gestiona programación (`POST /api/trips`), consulta propia del operador (`GET /api/trips/mine`), detalle con trazo de ruta incluido (`GET /api/trips/{id}`), inicio (`POST /api/trips/{id}/start`), finalización (`/finish`) y cancelación (`/cancel`), garantizando que un operador nunca pueda consultar ni accionar viajes ajenos (`403 Forbidden`) ni iniciar viajes simultáneos (`409 Conflict`).

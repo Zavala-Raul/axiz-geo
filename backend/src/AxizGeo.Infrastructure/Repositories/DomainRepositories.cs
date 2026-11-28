@@ -98,6 +98,26 @@ public class RouteRepository(AppDbContext db) : Repository<GeoRoute>(db), IRoute
 
     public async Task<IReadOnlyList<GeoRoute>> ListActiveAsync(CancellationToken ct = default) =>
         await Set.AsNoTracking().Where(r => r.IsActive).OrderByDescending(r => r.CreatedAt).ToListAsync(ct);
+
+    public async Task<(IReadOnlyList<GeoRoute> Items, int TotalCount)> ListPagedAsync(
+        bool includeInactive,
+        int page,
+        int pageSize,
+        CancellationToken ct = default)
+    {
+        var query = Set.AsNoTracking().AsQueryable();
+        if (!includeInactive)
+            query = query.Where(r => r.IsActive);
+
+        var total = await query.CountAsync(ct);
+        var items = await query
+            .OrderByDescending(r => r.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        return (items, total);
+    }
 }
 
 public class GeofenceRepository(AppDbContext db) : Repository<Geofence>(db), IGeofenceRepository
@@ -150,6 +170,43 @@ public class TripRepository(AppDbContext db) : Repository<Trip>(db), ITripReposi
                              ((t.LastPositionAt != null && t.LastPositionAt < thresholdUtc) ||
                               (t.LastPositionAt == null && t.StartedAt != null && t.StartedAt < thresholdUtc)))
                  .ToListAsync(ct);
+
+    public async Task<(IReadOnlyList<Trip> Items, int TotalCount)> ListPagedAsync(
+        TripStatus? status,
+        Guid? unitId,
+        Guid? operatorId,
+        DateTime? fromUtc,
+        DateTime? toUtc,
+        int page,
+        int pageSize,
+        CancellationToken ct = default)
+    {
+        var query = Set.AsNoTracking()
+            .Include(t => t.Unit)
+            .Include(t => t.Operator)
+            .Include(t => t.Route)
+            .AsQueryable();
+
+        if (status.HasValue)
+            query = query.Where(t => t.Status == status.Value);
+        if (unitId.HasValue)
+            query = query.Where(t => t.UnitId == unitId.Value);
+        if (operatorId.HasValue)
+            query = query.Where(t => t.OperatorId == operatorId.Value);
+        if (fromUtc.HasValue)
+            query = query.Where(t => t.ScheduledStart >= fromUtc.Value);
+        if (toUtc.HasValue)
+            query = query.Where(t => t.ScheduledStart <= toUtc.Value);
+
+        var total = await query.CountAsync(ct);
+        var items = await query
+            .OrderByDescending(t => t.ScheduledStart)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        return (items, total);
+    }
 }
 
 public class PositionRepository(AppDbContext db) : Repository<Position>(db), IPositionRepository
