@@ -79,11 +79,19 @@ namespace AxizGeo.Infrastructure.Persistence.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
 
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.HasKey("Id");
 
                     b.HasIndex("GeofenceId");
 
                     b.HasIndex("Status", "CreatedAt");
+
+                    b.HasIndex("TripId", "Type")
+                        .IsUnique()
+                        .HasDatabaseName("IX_alerts_TripId_Type_Open")
+                        .HasFilter("\"Status\" IN ('New', 'InReview')");
 
                     b.HasIndex("TripId", "Type", "Status");
 
@@ -128,13 +136,19 @@ namespace AxizGeo.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("geography (LineString, 4326)");
 
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<MultiPoint>("Waypoints")
                         .IsRequired()
                         .HasColumnType("geography (MultiPoint, 4326)");
 
                     b.HasKey("Id");
 
-                    b.ToTable("routes", (string)null);
+                    b.ToTable("routes", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_routes_CorridorMeters", "\"CorridorMeters\" BETWEEN 25 AND 2000");
+                        });
                 });
 
             modelBuilder.Entity("AxizGeo.Domain.Entities.Geofence", b =>
@@ -175,13 +189,19 @@ namespace AxizGeo.Infrastructure.Persistence.Migrations
                         .HasMaxLength(24)
                         .HasColumnType("character varying(24)");
 
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Geometry");
 
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Geometry"), "GIST");
 
-                    b.ToTable("geofences", (string)null);
+                    b.ToTable("geofences", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_geofences_RadiusMeters", "\"RadiusMeters\" IS NULL OR \"RadiusMeters\" > 0");
+                        });
                 });
 
             modelBuilder.Entity("AxizGeo.Domain.Entities.Operator", b =>
@@ -215,6 +235,9 @@ namespace AxizGeo.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
@@ -276,7 +299,10 @@ namespace AxizGeo.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("TripId", "CapturedAt");
 
-                    b.ToTable("positions", (string)null);
+                    b.ToTable("positions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_positions_AccuracyMeters", "\"AccuracyMeters\" >= 0");
+                        });
                 });
 
             modelBuilder.Entity("AxizGeo.Domain.Entities.Trip", b =>
@@ -318,13 +344,22 @@ namespace AxizGeo.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("UnitId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("OperatorId");
+                    b.HasIndex("OperatorId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_trips_OperatorId_Active")
+                        .HasFilter("\"Status\" = 'InProgress'");
 
                     b.HasIndex("RouteId");
 
-                    b.HasIndex("UnitId");
+                    b.HasIndex("UnitId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_trips_UnitId_Active")
+                        .HasFilter("\"Status\" = 'InProgress'");
 
                     b.HasIndex("Status", "LastPositionAt");
 
@@ -366,6 +401,9 @@ namespace AxizGeo.Infrastructure.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<double?>("WeightTons")
                         .HasColumnType("double precision");
 
@@ -377,7 +415,10 @@ namespace AxizGeo.Infrastructure.Persistence.Migrations
                     b.HasIndex("EconomicNumber")
                         .IsUnique();
 
-                    b.ToTable("units", (string)null);
+                    b.ToTable("units", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_units_Year", "\"Year\" BETWEEN 1990 AND 2035");
+                        });
                 });
 
             modelBuilder.Entity("AxizGeo.Infrastructure.Identity.ApplicationUser", b =>
@@ -454,6 +495,43 @@ namespace AxizGeo.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("UserNameIndex");
 
                     b.ToTable("AspNetUsers", (string)null);
+                });
+
+            modelBuilder.Entity("AxizGeo.Infrastructure.Identity.RefreshToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReplacedByTokenHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId", "ExpiresAt");
+
+                    b.ToTable("refresh_tokens", (string)null);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole<System.Guid>", b =>
@@ -649,6 +727,17 @@ namespace AxizGeo.Infrastructure.Persistence.Migrations
                     b.Navigation("Route");
 
                     b.Navigation("Unit");
+                });
+
+            modelBuilder.Entity("AxizGeo.Infrastructure.Identity.RefreshToken", b =>
+                {
+                    b.HasOne("AxizGeo.Infrastructure.Identity.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>

@@ -98,6 +98,26 @@ public class RouteRepository(AppDbContext db) : Repository<GeoRoute>(db), IRoute
 
     public async Task<IReadOnlyList<GeoRoute>> ListActiveAsync(CancellationToken ct = default) =>
         await Set.AsNoTracking().Where(r => r.IsActive).OrderByDescending(r => r.CreatedAt).ToListAsync(ct);
+
+    public async Task<(IReadOnlyList<GeoRoute> Items, int TotalCount)> ListPagedAsync(
+        bool includeInactive,
+        int page,
+        int pageSize,
+        CancellationToken ct = default)
+    {
+        var query = Set.AsNoTracking().AsQueryable();
+        if (!includeInactive)
+            query = query.Where(r => r.IsActive);
+
+        var total = await query.CountAsync(ct);
+        var items = await query
+            .OrderByDescending(r => r.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        return (items, total);
+    }
 }
 
 public class GeofenceRepository(AppDbContext db) : Repository<Geofence>(db), IGeofenceRepository
@@ -150,6 +170,43 @@ public class TripRepository(AppDbContext db) : Repository<Trip>(db), ITripReposi
                              ((t.LastPositionAt != null && t.LastPositionAt < thresholdUtc) ||
                               (t.LastPositionAt == null && t.StartedAt != null && t.StartedAt < thresholdUtc)))
                  .ToListAsync(ct);
+
+    public async Task<(IReadOnlyList<Trip> Items, int TotalCount)> ListPagedAsync(
+        TripStatus? status,
+        Guid? unitId,
+        Guid? operatorId,
+        DateTime? fromUtc,
+        DateTime? toUtc,
+        int page,
+        int pageSize,
+        CancellationToken ct = default)
+    {
+        var query = Set.AsNoTracking()
+            .Include(t => t.Unit)
+            .Include(t => t.Operator)
+            .Include(t => t.Route)
+            .AsQueryable();
+
+        if (status.HasValue)
+            query = query.Where(t => t.Status == status.Value);
+        if (unitId.HasValue)
+            query = query.Where(t => t.UnitId == unitId.Value);
+        if (operatorId.HasValue)
+            query = query.Where(t => t.OperatorId == operatorId.Value);
+        if (fromUtc.HasValue)
+            query = query.Where(t => t.ScheduledStart >= fromUtc.Value);
+        if (toUtc.HasValue)
+            query = query.Where(t => t.ScheduledStart <= toUtc.Value);
+
+        var total = await query.CountAsync(ct);
+        var items = await query
+            .OrderByDescending(t => t.ScheduledStart)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        return (items, total);
+    }
 }
 
 public class PositionRepository(AppDbContext db) : Repository<Position>(db), IPositionRepository
@@ -185,4 +242,51 @@ public class AlertRepository(AppDbContext db) : Repository<Alert>(db), IAlertRep
         Set.AnyAsync(a => a.TripId == tripId &&
                           a.Type == type &&
                           (a.Status == AlertStatus.New || a.Status == AlertStatus.InReview), ct);
+
+    public async Task<IReadOnlyList<AlertType>> GetOpenAlertTypesAsync(Guid tripId, CancellationToken ct = default) =>
+        await Set.AsNoTracking()
+            .Where(a => a.TripId == tripId && (a.Status == AlertStatus.New || a.Status == AlertStatus.InReview))
+            .Select(a => a.Type)
+            .Distinct()
+            .ToListAsync(ct);
+
+    public async Task<(IReadOnlyList<Alert> Items, int TotalCount)> ListPagedAsync(
+        IReadOnlyList<AlertStatus>? statuses,
+        AlertType? type,
+        Guid? unitId,
+        DateTime? fromUtc,
+        DateTime? toUtc,
+        int page,
+        int pageSize,
+        CancellationToken ct = default)
+    {
+        var query = Set.AsNoTracking()
+            .Include(a => a.Trip)
+                .ThenInclude(t => t.Unit)
+            .Include(a => a.Trip)
+                .ThenInclude(t => t.Operator)
+            .Include(a => a.Trip)
+                .ThenInclude(t => t.Route)
+            .AsQueryable();
+
+        if (statuses is { Count: > 0 })
+            query = query.Where(a => statuses.Contains(a.Status));
+        if (type.HasValue)
+            query = query.Where(a => a.Type == type.Value);
+        if (unitId.HasValue)
+            query = query.Where(a => a.Trip.UnitId == unitId.Value);
+        if (fromUtc.HasValue)
+            query = query.Where(a => a.CreatedAt >= fromUtc.Value);
+        if (toUtc.HasValue)
+            query = query.Where(a => a.CreatedAt <= toUtc.Value);
+
+        var total = await query.CountAsync(ct);
+        var items = await query
+            .OrderByDescending(a => a.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        return (items, total);
+    }
 }

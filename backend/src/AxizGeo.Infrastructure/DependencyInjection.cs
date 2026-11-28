@@ -1,7 +1,10 @@
 using AxizGeo.Application.Abstractions;
+using AxizGeo.Application.Rules;
 using AxizGeo.Infrastructure.Identity;
+using AxizGeo.Infrastructure.Notifications;
 using AxizGeo.Infrastructure.Persistence;
 using AxizGeo.Infrastructure.Repositories;
+using AxizGeo.Infrastructure.Routing;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -17,7 +20,14 @@ public static class DependencyInjection
             ?? "Host=localhost;Port=5432;Database=axiz_geo;Username=axiz_user;Password=axiz_dev_password_change_me";
 
         services.AddDbContext<AppDbContext>(options =>
-            options.UseNpgsql(connectionString, npgsql => npgsql.UseNetTopologySuite()));
+            options.UseNpgsql(connectionString, npgsql =>
+            {
+                npgsql.UseNetTopologySuite();
+                npgsql.EnableRetryOnFailure(
+                    maxRetryCount: 5,
+                    maxRetryDelay: TimeSpan.FromSeconds(5),
+                    errorCodesToAdd: null);
+            }));
 
         services.AddIdentityCore<ApplicationUser>(options =>
             {
@@ -34,10 +44,27 @@ public static class DependencyInjection
             .AddEntityFrameworkStores<AppDbContext>();
 
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
+        services.Configure<OrsOptions>(configuration.GetSection(OrsOptions.SectionName));
+        services.Configure<TelemetryRulesOptions>(configuration.GetSection(TelemetryRulesOptions.SectionName));
+        services.Configure<EmailNotificationOptions>(configuration.GetSection(EmailNotificationOptions.SectionName));
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IIdentityOperatorProvisioner, IdentityOperatorProvisioner>();
+        services.AddScoped<IFleetNotifier, LoggingFleetNotifier>();
+        services.AddScoped<IAlertNotificationChannel, EmailAlertNotificationChannel>();
+
+        var orsBaseUrl = configuration[$"{OrsOptions.SectionName}:BaseUrl"]
+                         ?? "https://api.heigit.org/openrouteservice/";
+        if (!orsBaseUrl.EndsWith('/'))
+            orsBaseUrl += "/";
+
+        services.AddHttpClient<IRoutingProvider, OpenRouteServiceAdapter>(client =>
+            {
+                client.BaseAddress = new Uri(orsBaseUrl);
+                client.Timeout = TimeSpan.FromSeconds(15);
+            })
+            .AddStandardResilienceHandler();
 
         services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
         services.AddScoped<IUnitRepository, UnitRepository>();
@@ -47,6 +74,7 @@ public static class DependencyInjection
         services.AddScoped<ITripRepository, TripRepository>();
         services.AddScoped<IPositionRepository, PositionRepository>();
         services.AddScoped<IAlertRepository, AlertRepository>();
+        services.AddScoped<IFleetReadRepository, FleetReadRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
 
         return services;

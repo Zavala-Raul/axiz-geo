@@ -16,6 +16,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<Trip> Trips => Set<Trip>();
     public DbSet<Position> Positions => Set<Position>();
     public DbSet<Alert> Alerts => Set<Alert>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -28,9 +29,28 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
             b.Property(u => u.FullName).HasMaxLength(150).IsRequired();
         });
 
+        builder.Entity<RefreshToken>(b =>
+        {
+            b.ToTable("refresh_tokens");
+            b.HasKey(x => x.Id);
+            b.Property(x => x.TokenHash).HasMaxLength(128).IsRequired();
+            b.HasIndex(x => x.TokenHash).IsUnique();
+            b.Property(x => x.ReplacedByTokenHash).HasMaxLength(128);
+
+            b.HasOne(x => x.User)
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasIndex(x => new { x.UserId, x.ExpiresAt });
+        });
+
         builder.Entity<Unit>(b =>
         {
-            b.ToTable("units");
+            b.ToTable("units", t =>
+            {
+                t.HasCheckConstraint("CK_units_Year", "\"Year\" BETWEEN 1990 AND 2035");
+            });
             b.HasKey(x => x.Id);
             b.Property(x => x.EconomicNumber).HasMaxLength(32).IsRequired();
             b.HasIndex(x => x.EconomicNumber).IsUnique();
@@ -57,7 +77,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
 
         builder.Entity<GeoRoute>(b =>
         {
-            b.ToTable("routes");
+            b.ToTable("routes", t =>
+            {
+                t.HasCheckConstraint("CK_routes_CorridorMeters", "\"CorridorMeters\" BETWEEN 25 AND 2000");
+            });
             b.HasKey(x => x.Id);
             b.Property(x => x.Name).HasMaxLength(160).IsRequired();
             b.Property(x => x.CreatedByName).HasMaxLength(150).IsRequired();
@@ -71,7 +94,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
 
         builder.Entity<Geofence>(b =>
         {
-            b.ToTable("geofences");
+            b.ToTable("geofences", t =>
+            {
+                t.HasCheckConstraint("CK_geofences_RadiusMeters", "\"RadiusMeters\" IS NULL OR \"RadiusMeters\" > 0");
+            });
             b.HasKey(x => x.Id);
             b.Property(x => x.Name).HasMaxLength(160).IsRequired();
             b.Property(x => x.Type).HasConversion<string>().HasMaxLength(24).IsRequired();
@@ -106,11 +132,25 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
                 .OnDelete(DeleteBehavior.Restrict);
 
             b.HasIndex(x => new { x.Status, x.LastPositionAt });
+
+            // Índices únicos parciales en PostgreSQL: impiden condiciones de carrera de viajes simultáneos
+            b.HasIndex(x => x.UnitId)
+                .IsUnique()
+                .HasDatabaseName("IX_trips_UnitId_Active")
+                .HasFilter("\"Status\" = 'InProgress'");
+
+            b.HasIndex(x => x.OperatorId)
+                .IsUnique()
+                .HasDatabaseName("IX_trips_OperatorId_Active")
+                .HasFilter("\"Status\" = 'InProgress'");
         });
 
         builder.Entity<Position>(b =>
         {
-            b.ToTable("positions");
+            b.ToTable("positions", t =>
+            {
+                t.HasCheckConstraint("CK_positions_AccuracyMeters", "\"AccuracyMeters\" >= 0");
+            });
             b.HasKey(x => x.Id);
             b.Property(x => x.Id).ValueGeneratedNever();
             b.Property(x => x.Source).HasConversion<string>().HasMaxLength(24).IsRequired();
@@ -152,6 +192,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
 
             b.HasIndex(x => new { x.Status, x.CreatedAt });
             b.HasIndex(x => new { x.TripId, x.Type, x.Status });
+
+            // Índice único parcial anti-spam: máximo 1 alerta abierta por tipo y viaje
+            b.HasIndex(x => new { x.TripId, x.Type })
+                .IsUnique()
+                .HasDatabaseName("IX_alerts_TripId_Type_Open")
+                .HasFilter("\"Status\" IN ('New', 'InReview')");
         });
     }
 }

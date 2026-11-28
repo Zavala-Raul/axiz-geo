@@ -7,3 +7,5 @@ public sealed class ConflictException(string message) : Exception(message);
 public sealed class ForbiddenException(string message) : Exception(message);
 
 public sealed class UnauthorizedAppException(string message) : Exception(message);
+
+public sealed class BadGatewayException(string message) : Exception(message);

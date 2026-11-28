@@ -67,6 +67,12 @@ public sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logge
                 tripStateEx.Message,
                 null),
 
+            BadGatewayException badGatewayEx => (
+                StatusCodes.Status502BadGateway,
+                "Bad gateway",
+                badGatewayEx.Message,
+                null),
+
             _ => (
                 StatusCodes.Status500InternalServerError,
                 "Server error",

@@ -107,18 +107,95 @@ Se implementó `IExceptionHandler` para traducir de forma uniforme las excepcion
 
 ---
 
-## Fase 7 — Autenticación por Roles, Interceptor de Refresh Token, Layout Institucional y Ruteo Protegido en Frontend (`feature/frontend-auth-and-layout`)
+## Fase 7 — Goal 3: Geocercas (Strategy), Rutas de Tractocamión (Adapter) y Viajes (`feature/backend-geofences-routes-trips`)
 
-### 7.1 Arquitectura Modular por Features, Fechas UTC y Cliente HTTP con Refresh Token (`src/shared/`)
+### 7.1 Patrón Strategy para Evaluación Geoespacial (`AxizGeo.Application/Geofencing`)
+- **Problema que resuelve**: El sistema maneja geocercas circulares (`Point` + `RadiusMeters`), geocercas poligonales (`Polygon`) y corredores de ruta (`LineString` + `CorridorMeters`). Para evitar condicionales acoplados al evaluar telemetría, se definieron estrategias intercambiables registradas por Inyección de Dependencias:
+  - `CircleGeofenceEvaluator` (`IGeofenceEvaluator`): calcula distancia geodésica esférica exacta (fórmula de Haversine en metros) respecto al centro.
+  - `PolygonGeofenceEvaluator` (`IGeofenceEvaluator`): evalúa inclusión topológica OGC (`Covers`) sobre el polígono.
+  - `GeofenceEvaluatorResolver`: selecciona en `O(1)` la estrategia correspondiente al `GeofenceType`.
+  - `CorridorEvaluator` (`ICorridorEvaluator`): proyecta coordenadas sobre cada segmento del `LineString` usando proyección equirectangular local centrada en la latitud evaluada para medir en metros la desviación perpendicular al eje autorizado.
+
+### 7.2 Patrón Adapter para Ruteo de Vehículo Pesado (`OpenRouteServiceAdapter` y `/api/routes`)
+- **Problema que resuelve**: Aísla el dominio respecto del contrato JSON externo de HeiGIT OpenRouteService (`api.heigit.org/openrouteservice/v2/directions/driving-hgv/geojson`) y oculta la `ApiKey` en el servidor.
+- Configura `HttpClient` con resiliencia estándar (`Microsoft.Extensions.Http.Resilience`), envía radios de tolerancia (`1000 m`) por waypoint y restricciones físicas (`height`, `weight`) cuando se indica una unidad (`unitId`), traduciendo errores externos (ej. código `2010`) a mensajes legibles (`400` / `502`).
+- Expone `POST /api/routes/preview` y el CRUD completo de `/api/routes` registrando al usuario autor de cada ruta o cambio autorizado.
+
+### 7.3 Geocercas GeoJSON (`/api/geofences`) y Ciclo de Vida de Viajes (`/api/trips`)
+- **`GeoJsonMapper` y `GeofencesController`**: Mapea y valida coordenadas `[longitud, latitud]`, anillos cerrados sin auto-intersección (`IsValid`) y serialización limpia de `Point` y `Polygon` para consumo directo desde Terra Draw y MapLibre GL.
+- **`TripService` y `TripsController`**: Gestiona programación (`POST /api/trips`), consulta propia del operador (`GET /api/trips/mine`), detalle con trazo de ruta incluido (`GET /api/trips/{id}`), inicio (`POST /api/trips/{id}/start`), finalización (`/finish`) y cancelación (`/cancel`), garantizando que un operador nunca pueda consultar ni accionar viajes ajenos (`403 Forbidden`) ni iniciar viajes simultáneos (`409 Conflict`).
+
+---
+
+## Fase 8 — Autenticación por Roles, Interceptor de Refresh Token, Layout Institucional y Ruteo Protegido en Frontend (`feature/frontend-auth-and-layout`)
+
+### 8.1 Arquitectura Modular por Features, Fechas UTC y Cliente HTTP con Refresh Token (`src/shared/`)
 - **`src/shared/types/api.ts`**: Definición estricta en TypeScript de todos los DTOs, enumeraciones como strings (`Role`, `TripStatus`, `GeofenceType`, `GeofenceKind`, `AlertType`, `AlertStatus`, `AlertSeverity`, `LiveStatus`), geometrías GeoJSON (`[longitud, latitud]` SRID 4326) y errores `ProblemDetails` (RFC 9457) alineados con `docs/api-contract.md`.
 - **`src/shared/utils/date.ts`**: Conversión estandarizada de fechas salientes en ISO 8601 UTC (`toUtcIsoString()`) y formateo de marcas de tiempo entrantes (`Z`) hacia la zona horaria fronteriza `America/Matamoros`, además del cálculo de antigüedad relativa (`"hace 45 s"`).
 - **`src/shared/api/httpClient.ts`**: Cliente HTTP centralizado que adjunta `Authorization: Bearer <accessToken>`, procesa errores `ProblemDetails` e implementa un **interceptor automático de `401 Unauthorized`**: si existe `refreshToken` en sesión, intenta una sola vez `POST /api/auth/refresh` (deduplicando peticiones concurrentes en vuelo), actualiza `{ accessToken, expiresAt, refreshToken }` en el store y reintenta la petición original automáticamente; si no hay `refreshToken` o la rotación responde `401`, limpia la sesión y redirige a `/login`.
 
-### 7.2 Módulo de Autenticación y Patrones en Frontend (`src/features/auth/`)
+### 8.2 Módulo de Autenticación y Patrones en Frontend (`src/features/auth/`)
 - **Separación Container / Presentational**: `LoginPage.tsx` (contenedor con lógica de estado, redirección por rol y manejo de errores) desacoplado de `LoginForm.tsx` (componente presentacional puro con selector rápido de las 5 cuentas semilla de demostración y logotipo oficial `axiz_logo.png`).
 - **Custom Hook y Context (`AuthContext` + `useAuth`)**: Gestión centralizada de sesión (`{ accessToken, expiresAt, refreshToken, user }`) persistida en `localStorage`, registro del manejador de rotación de token ante el `httpClient`, revalidación con `GET /api/auth/me`, envío de `{ refreshToken }` en `POST /api/auth/logout` y verificación de permisos por rol (`hasRole`).
 - **Conmutación limpia Mock / API Real (`VITE_USE_MOCKS`)**: `authService.ts` alterna de forma transparente entre `/api/auth/login`, `/api/auth/refresh`, `/api/auth/me` y `/api/auth/logout` del backend .NET 10 y `authMock.ts` sin acoplar los componentes de UI.
 
-### 7.3 Layout Institucional Axiz Geo y Guard de Rutas (`ProtectedRoute` y `AppLayout`)
+### 8.3 Layout Institucional Axiz Geo y Guard de Rutas (`ProtectedRoute` y `AppLayout`)
 - **`ProtectedRoute.tsx`**: Guard de navegación en React Router que protege rutas autenticadas y valida la matriz de permisos (`Admin`, `Monitor`, `Operator`), mostrando una vista explícita `HTTP 403 · Acceso Restringido por Rol` cuando un perfil intenta ingresar a un módulo no autorizado.
 - **`AppLayout.tsx`**: Shell principal con la identidad visual de Axiz Geo (`#213D71` azul profundo, `#AEAEB0` gris claro, `#CBC4B1` crema arena), menú lateral filtrado dinámicamente según el rol activo, reloj en vivo en `America/Matamoros`, indicador de salud del backend (`/health` o modo simulación) y etiquetas de estado accesibles que combinan siempre ícono y texto.
+
+---
+
+## Fase 9 — Goal 4: Ingesta de Telemetría, Motor de Reglas, Gestión de Alertas y Endurecimiento PostgreSQL (`feature/backend-telemetry-and-alerts`)
+
+### 9.1 Patrón Chain of Responsibility y Patrón Factory (`AxizGeo.Application/Rules` y `Alerts`)
+- **`TelemetryPipeline` (`ITelemetryRule`)**: Evalúa cada coordenada entrante mediante una cadena desacoplada y ordenada:
+  1. `AccuracyRule` (`Order = 10`): Si `AccuracyMeters > 50 m`, marca `StopProcessing = true` (la posición se almacena con fines de trazabilidad, pero corta la cadena evitando falsas alarmas por rebote de señal GPS).
+  2. `DeviationRule` (`Order = 20`): Calcula la distancia perpendicular al corredor con `ICorridorEvaluator`; confirma una desviación únicamente cuando detecta **2 posiciones válidas consecutivas** fuera del margen autorizado y verifica que no exista ya una alerta `Deviation` abierta para ese viaje (control anti-spam).
+  3. `RestrictedZoneRule` (`Order = 30`): Evalúa inclusión en geocercas activas de tipo `Restricted` usando `GeofenceEvaluatorResolver` y levanta alerta de severidad `High`.
+- **`AlertFactory`**: Centraliza la construcción de alertas (`Deviation`, `RestrictedZone`, `NoSignal`) con mensajes descriptivos en español y detección automática de alertas históricas (`IsHistorical = true` cuando el lote llega con más de 2 minutos de desfase tras una pérdida de conexión).
+
+### 9.2 Ingesta Idempotente (`POST /api/telemetry/batch`), Alertas (`/api/alerts`) y Monitor de Señal
+- **`TelemetryService` y `TelemetryController`**: Procesa lotes de hasta 500 posiciones ordenados cronológicamente por `CapturedAt`, ignora sin error `id` duplicados (idempotencia en reconexiones), valida que un `Operator` solo reporte en su propio viaje `InProgress` y persiste posiciones, alertas y `LastPositionAt` en **una única transacción** (`IUnitOfWork.SaveChangesAsync`).
+- **`AlertService` y `AlertsController`**: Consulta paginada con filtro múltiple (`?status=New,InReview`), transición a revisión (`/review`), resolución (`/resolve`) y descarte por falsa alarma (`/dismiss`) delegando las invariantes al **Patrón State** (`AlertState`).
+- **`NoSignalMonitorBackgroundService`**: Proceso en segundo plano (`BackgroundService`) que inspecciona cada 30 segundos los viajes `InProgress` cuya última posición supere el umbral configurable (`NoSignalMinutes = 3`) y emite alerta `NoSignal`.
+
+### 9.3 Endurecimiento de Base de Datos en PostgreSQL (`AddDatabaseConstraintsAndTriggers`)
+- **Índices únicos parciales (`WHERE`)**: `IX_trips_UnitId_Active`, `IX_trips_OperatorId_Active` (`WHERE "Status" = 'InProgress'`) e `IX_alerts_TripId_Type_Open` (`WHERE "Status" IN ('New', 'InReview')`) para impedir condiciones de carrera directamente en el motor PostgreSQL.
+- **Restricciones `CHECK`**: Validaciones físicas en tablas (`CK_units_Year`, `CK_routes_CorridorMeters`, `CK_geofences_RadiusMeters`, `CK_positions_AccuracyMeters`).
+- **Función y Triggers PL/pgSQL (`fn_set_updated_at`)**: Trigger `BEFORE UPDATE` sobre `units`, `operators`, `routes`, `geofences`, `trips` y `alerts` que actualiza automáticamente la columna de auditoría `UpdatedAt` en UTC.
+
+---
+
+## Fase 10 — Goal 5: Flota en Vivo, Historial por Periodos (12 h), SignalR y Salud de BD (`feature/backend-live-fleet-and-realtime`)
+
+### 10.1 Monitoreo de Flota en Vivo y Dashboard (`FleetQueryService`, `/api/fleet/live`, `/api/dashboard/summary`)
+- **`FleetReadRepository`**: Consulta optimizada sin `N+1` que consolida unidades activas, viajes `InProgress`, última posición reportada y conteo de alertas abiertas (`New`, `InReview`).
+- **`CalculateLiveStatus`**: Clasifica determinísticamente el estado operativo de cada unidad (`Idle`, `NoSignal`, `Deviated`, `Stopped`, `OnRoute`) considerando antigüedad del reporte (`> 3 min`), permanencia en el corredor autorizado y velocidad actual.
+
+### 10.2 Historial de Recorrido por Periodos de 12 Horas (`GET /api/units/{id}/track`)
+- Consulta acotada (por defecto últimas **12 horas**, máximo 7 días) devolviendo `TrackDto` con:
+  - `LineString` del recorrido (aplicando simplificación topológica **Douglas-Peucker** cuando supera 1,500 puntos para mantener fluidez en MapLibre GL).
+  - Puntos detallados con hora UTC, velocidad, precisión e indicador `insideCorridor`.
+  - Viajes asociados en la ventana temporal para superponer el corredor autorizado debajo del trazo real.
+  - Línea de tiempo cronológica de eventos (`TripStarted`, `TripFinished`, `Alert` y detección automática de paradas prolongadas `Stop` ≥ 5 min).
+
+### 10.3 Patrón Observer en Tiempo Real con SignalR (`FleetHub` y `SignalRFleetNotifier`)
+- **`/hubs/fleet`**: Hub autenticado para roles `Admin` y `Monitor` que agrupa las conexiones activas en `"monitors"`.
+- **`SignalRFleetNotifier` (`IFleetNotifier`)**: Publica en tiempo real `UnitUpdated`, `AlertRaised` y `AlertUpdated`, e invoca de forma aislada cualquier `IAlertNotificationChannel` externo registrado (dejando listo el punto de extensión para notificaciones por correo SMTP).
+
+### 10.4 Verificación de Salud PostgreSQL (`/health`) y CORS para Previews de Vercel
+- El endpoint `/health` comprueba conectividad real contra PostgreSQL (`CanConnectAsync` con timeout de 2 s), devolviendo `503 Service Unavailable` en producción si la base de datos no responde.
+- La política CORS admite tanto orígenes explícitos (`Cors:AllowedOrigins`) como URLs efímeras de *Preview Deployments* en Vercel bajo prefijo controlado (`Cors:VercelPreviewPrefix`).
+
+---
+
+## Fase 11 — Goal 6: Renovación Dinámica de JWT (`RefreshToken`) y Canal de Alertas por Correo SMTP (`feature/backend-refresh-and-email`)
+
+### 11.1 Sesiones Dinámicas con Rotación y Revocación de `RefreshToken` (`refresh_tokens`, `POST /api/auth/refresh`)
+- **Almacenamiento seguro con SHA-256**: El servidor genera un token criptográfico aleatorio de 256 bits (`RandomNumberGenerator`), entrega el valor opaco en `LoginResponse.refreshToken` y almacena en PostgreSQL únicamente su resumen `SHA-256` (`TokenHash` con índice `UNIQUE`).
+- **JWT corto + Rotación atómica**: El `accessToken` reduce su vigencia a **30 minutos** (`Jwt:ExpirationMinutes = 30`). Cuando el interceptor del cliente detecta expiración (`401`), invoca `POST /api/auth/refresh`: el backend verifica vigencia, revoca el `RefreshToken` anterior registrando `ReplacedByTokenHash`, valida que la cuenta siga activa (`IsActive == true`) y emite un nuevo par `{ accessToken, refreshToken }`.
+- **Revocación inmediata**: Tanto `POST /api/auth/logout` como la desactivación administrativa de un operador en `OperatorsController` revocan sus `RefreshTokens` activos en base de datos, impidiendo renovar sesión.
+
+### 11.2 Notificaciones de Alertas por Correo Electrónico SMTP (`EmailAlertNotificationChannel`)
+- Implementa la interfaz `IAlertNotificationChannel` conectándose de forma limpia al despachador **Observer** (`SignalRFleetNotifier`) sin modificar el motor de reglas (**Principio Abierto/Cerrado — OCP**).
+- Construye plantillas HTML corporativas de **Axiz Geo** con severidad, unidad, operador, hora convertida a `America/Matamoros` y enlace directo al punto exacto en **OpenStreetMap**, operando de manera tolerante a fallos cuando `Notifications:Email:Enabled` está desactivado.
