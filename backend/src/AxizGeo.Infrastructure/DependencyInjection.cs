@@ -65,6 +65,7 @@ public static class DependencyInjection
         services.AddScoped<ITripRepository, TripRepository>();
         services.AddScoped<IPositionRepository, PositionRepository>();
         services.AddScoped<IAlertRepository, AlertRepository>();
+        services.AddScoped<IFleetReadRepository, FleetReadRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
 
         return services;
